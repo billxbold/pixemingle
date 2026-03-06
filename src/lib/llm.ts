@@ -4,6 +4,9 @@ import { SOUL_CONFIGS } from './constants';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Use Haiku for dev/testing, swap to Sonnet for production
+const LLM_MODEL = process.env.LLM_MODEL || 'claude-haiku-4-5-20251001';
+
 const ANIMATION_ACTIONS = [
   'idle', 'nervous_walk', 'confident_walk', 'walk_away',
   'pickup_line', 'eye_roll', 'phone_check', 'blush',
@@ -67,7 +70,7 @@ Output ONLY this JSON structure:
 }`;
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: LLM_MODEL,
     max_tokens: 2000,
     messages: [{ role: 'user', content: prompt }],
   });
@@ -81,7 +84,7 @@ Output ONLY this JSON structure:
   } catch {
     // Retry once on parse failure
     const retryResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: LLM_MODEL,
       max_tokens: 2000,
       messages: [
         { role: 'user', content: prompt },

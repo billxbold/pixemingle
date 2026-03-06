@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { SoulType, PersonalityAnswers, AgentAppearance } from '@/types/database'
 import { AuthStep } from './steps/AuthStep'
 import { BasicInfoStep } from './steps/BasicInfoStep'
@@ -10,6 +10,7 @@ import { SoulStep } from './steps/SoulStep'
 import { CharacterStep } from './steps/CharacterStep'
 import { RoleStep } from './steps/RoleStep'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase'
 
 export interface OnboardingData {
   name: string
@@ -46,6 +47,16 @@ export function OnboardingWizard() {
   const [data, setData] = useState<OnboardingData>(INITIAL_DATA)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
+  const supabase = createClient()
+
+  // If returning from OAuth, skip auth step
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && currentStep === 0) {
+        setCurrentStep(1)
+      }
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateData = useCallback((partial: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...partial }))
