@@ -41,7 +41,10 @@ export function useNotifications(userId: string | null) {
         },
         (payload) => {
           const newNotification = payload.new as Notification;
-          setNotifications((prev) => [newNotification, ...prev]);
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === newNotification.id)) return prev;
+            return [newNotification, ...prev];
+          });
           setUnreadCount((prev) => prev + 1);
         }
       )

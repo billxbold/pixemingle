@@ -48,9 +48,11 @@ export async function POST(
     .map((s: { scenario_data: { result: string } }) => s.scenario_data?.result)
     .filter(Boolean);
 
-  // Determine chaser/gatekeeper
-  const chaser = (match.user_a as User).role === 'chaser' ? match.user_a as User : match.user_b as User;
-  const gatekeeper = (match.user_a as User).role === 'gatekeeper' ? match.user_a as User : match.user_b as User;
+  // Determine chaser/gatekeeper (user_a is the initiator, default to chaser if both have same role)
+  const userA = match.user_a as User;
+  const userB = match.user_b as User;
+  const chaser = userA.role === 'chaser' ? userA : userB.role === 'chaser' ? userB : userA;
+  const gatekeeper = chaser === userA ? userB : userA;
 
   try {
     const scenario = await generateScenario(

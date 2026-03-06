@@ -41,6 +41,11 @@ export function Canvas({
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 })
   const zoomAccumulatorRef = useRef(0)
+  // Touch state refs
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null)
+  const touchPanRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
+  const pinchStartDistRef = useRef<number | null>(null)
+  const pinchStartZoomRef = useRef<number>(zoom)
 
   const clampPan = useCallback((px: number, py: number): { x: number; y: number } => {
     const canvas = canvasRef.current
@@ -303,7 +308,7 @@ export function Canvas({
   }, [worldStateRef, screenToTile])
 
   const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+    (e: WheelEvent) => {
       e.preventDefault()
       const worldState = worldStateRef.current
       if (!worldState) return
@@ -342,6 +347,131 @@ export function Canvas({
     if (e.button === 1) e.preventDefault()
   }, [])
 
+  // --- Touch event handlers (attached via useEffect with { passive: false }) ---
+
+  const getTouchDistance = (t1: Touch, t2: Touch) => {
+    const dx = t1.clientX - t2.clientX
+    const dy = t1.clientY - t2.clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  const handleTouchStart = useCallback(
+    (e: TouchEvent) => {
+      e.preventDefault()
+      if (e.touches.length === 1) {
+        const t = e.touches[0]
+        touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() }
+        touchPanRef.current = {
+          startX: t.clientX,
+          startY: t.clientY,
+          panX: panRef.current.x,
+          panY: panRef.current.y,
+        }
+        pinchStartDistRef.current = null
+      } else if (e.touches.length === 2) {
+        // Start pinch-to-zoom
+        touchPanRef.current = null
+        const dist = getTouchDistance(e.touches[0], e.touches[1])
+        pinchStartDistRef.current = dist
+        pinchStartZoomRef.current = zoom
+      }
+    },
+    [panRef, zoom],
+  )
+
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      e.preventDefault()
+      const worldState = worldStateRef.current
+      if (!worldState) return
+
+      if (e.touches.length === 1 && touchPanRef.current && !pinchStartDistRef.current) {
+        // Single-finger pan
+        const t = e.touches[0]
+        const dpr = window.devicePixelRatio || 1
+        const dx = (t.clientX - touchPanRef.current.startX) * dpr
+        const dy = (t.clientY - touchPanRef.current.startY) * dpr
+        worldState.cameraFollowId = null
+        panRef.current = clampPan(
+          touchPanRef.current.panX + dx,
+          touchPanRef.current.panY + dy,
+        )
+      } else if (e.touches.length === 2 && pinchStartDistRef.current !== null) {
+        // Pinch-to-zoom
+        const dist = getTouchDistance(e.touches[0], e.touches[1])
+        const scale = dist / pinchStartDistRef.current
+        const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(pinchStartZoomRef.current * scale)))
+        if (newZoom !== zoom) {
+          onZoomChange(newZoom)
+        }
+      }
+    },
+    [worldStateRef, panRef, clampPan, zoom, onZoomChange],
+  )
+
+  const handleTouchEnd = useCallback(
+    (e: TouchEvent) => {
+      e.preventDefault()
+      // If it was a quick tap (no significant movement), treat as click
+      if (e.changedTouches.length === 1 && touchStartRef.current && !pinchStartDistRef.current) {
+        const t = e.changedTouches[0]
+        const dx = Math.abs(t.clientX - touchStartRef.current.x)
+        const dy = Math.abs(t.clientY - touchStartRef.current.y)
+        const dt = Date.now() - touchStartRef.current.time
+        if (dx < 10 && dy < 10 && dt < 300) {
+          // Simulate a tap/click
+          const worldState = worldStateRef.current
+          if (worldState) {
+            const pos = screenToWorld(t.clientX, t.clientY)
+            if (pos) {
+              const hitId = worldState.getCharacterAt(pos.worldX, pos.worldY)
+              if (hitId !== null) {
+                worldState.dismissBubble(hitId)
+                if (worldState.selectedAgentId === hitId) {
+                  worldState.selectedAgentId = null
+                  worldState.cameraFollowId = null
+                } else {
+                  worldState.selectedAgentId = hitId
+                  worldState.cameraFollowId = hitId
+                }
+                onAgentClick?.(hitId)
+              } else {
+                const tile = screenToTile(t.clientX, t.clientY)
+                if (tile) onTileClick?.(tile.col, tile.row)
+                if (worldState.selectedAgentId !== null) {
+                  worldState.selectedAgentId = null
+                  worldState.cameraFollowId = null
+                }
+              }
+            }
+          }
+        }
+      }
+      touchStartRef.current = null
+      touchPanRef.current = null
+      if (e.touches.length < 2) {
+        pinchStartDistRef.current = null
+      }
+    },
+    [worldStateRef, screenToWorld, screenToTile, onAgentClick, onTileClick],
+  )
+
+  // Attach touch + wheel events with { passive: false } so preventDefault() works
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false })
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false })
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel)
+      canvas.removeEventListener('touchstart', handleTouchStart)
+      canvas.removeEventListener('touchmove', handleTouchMove)
+      canvas.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd])
+
   return (
     <div
       ref={containerRef}
@@ -361,9 +491,8 @@ export function Canvas({
         onClick={handleClick}
         onAuxClick={handleAuxClick}
         onMouseLeave={handleMouseLeave}
-        onWheel={handleWheel}
         onContextMenu={handleContextMenu}
-        style={{ display: 'block' }}
+        style={{ display: 'block', touchAction: 'none' }}
       />
     </div>
   )

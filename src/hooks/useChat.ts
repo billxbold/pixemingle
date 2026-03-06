@@ -27,7 +27,7 @@ export function useChat(matchId: string | null) {
         setIsLoading(false);
       });
 
-    // Subscribe to new messages
+    // Subscribe to new messages (deduplicate by id)
     const channel = supabase
       .channel(`chat:${matchId}`)
       .on(
@@ -39,7 +39,11 @@ export function useChat(matchId: string | null) {
           filter: `match_id=eq.${matchId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as ChatMessage]);
+          const newMsg = payload.new as ChatMessage;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
         }
       )
       .subscribe();

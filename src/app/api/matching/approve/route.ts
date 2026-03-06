@@ -1,5 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { sendWebhook } from '@/lib/webhooks'
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase()
@@ -16,8 +17,8 @@ export async function POST(request: Request) {
       user_a_id: user.id,
       user_b_id: candidate_id,
       status: 'pending_b',
-      match_score: score || null,
-      match_reasons: reasons || null,
+      match_score: score ?? null,
+      match_reasons: reasons ?? null,
       attempt_count: 0,
     })
     .select()
@@ -34,6 +35,20 @@ export async function POST(request: Request) {
       from_user_id: user.id,
     },
   })
+
+  // Send webhook if candidate is an OpenClaw agent
+  const { data: agentRecord } = await supabase
+    .from('openclaw_agents')
+    .select('webhook_url')
+    .eq('user_id', candidate_id)
+    .single()
+  if (agentRecord?.webhook_url) {
+    sendWebhook(agentRecord.webhook_url, {
+      event: 'match_request',
+      match_id: match.id,
+      summary: 'Someone wants to match with your agent!',
+    })
+  }
 
   return NextResponse.json({ match })
 }

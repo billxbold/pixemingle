@@ -46,6 +46,7 @@ export function OnboardingWizard() {
   const [currentStep, setCurrentStep] = useState(0)
   const [data, setData] = useState<OnboardingData>(INITIAL_DATA)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -72,6 +73,7 @@ export function OnboardingWizard() {
 
   const submit = useCallback(async () => {
     setIsSubmitting(true)
+    setError(null)
     try {
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -92,7 +94,12 @@ export function OnboardingWizard() {
       })
       if (res.ok) {
         router.push('/world')
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        setError(errData.error || 'Failed to save profile. Please try again.')
       }
+    } catch {
+      setError('Network error. Please check your connection and try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -143,6 +150,11 @@ export function OnboardingWizard() {
             onBack={back}
             isSubmitting={isSubmitting}
           />
+        )}
+        {error && (
+          <div className="mt-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-300 text-sm text-center">
+            {error}
+          </div>
         )}
       </div>
     </div>
