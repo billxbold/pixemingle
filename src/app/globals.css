@@ -3,15 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #030712;
+  --foreground: #ededed;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -20,8 +17,59 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* iOS Safari viewport height fix — only apply on app pages, not landing */
+.app-shell, .app-shell body {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Prevent pull-to-refresh and elastic scroll on mobile (app pages) */
+.app-shell body {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+  .h-dvh {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .min-h-dvh {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  /* Safe area insets for notched devices */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* floating hearts animation for landing hero */
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(100vh) scale(0.5);
+  }
+  10% {
+    opacity: 0.7;
+  }
+  90% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20vh) scale(1.2);
+  }
+}
+
+.animate-float-up {
+  animation: float-up 8s ease-in-out infinite;
 }

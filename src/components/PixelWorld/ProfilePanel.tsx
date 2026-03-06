@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Candidate } from '@/types/database'
+import { ReportBlockModal } from './ReportBlockModal'
 
 interface ProfilePanelProps {
   candidate: Candidate
@@ -12,17 +13,30 @@ interface ProfilePanelProps {
 
 export function ProfilePanel({ candidate, onApprove, onPass, onClose }: ProfilePanelProps) {
   const [photoIndex, setPhotoIndex] = useState(0)
+  const [showReportModal, setShowReportModal] = useState(false)
   const { user, score, reasons } = candidate
   const photos = user.photos || []
 
   const scoreColor = score >= 80 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-orange-400'
 
   return (
-    <div className="absolute right-0 top-0 h-full w-80 bg-gray-900/95 border-l border-gray-700 flex flex-col animate-slide-in-right z-50">
+    <div className="absolute inset-0 md:inset-auto md:right-0 md:top-0 md:h-full md:w-80 bg-gray-900/95 md:border-l border-gray-700 flex flex-col animate-slide-in-right z-50">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-800">
         <h3 className="font-bold text-lg">{user.name}, {user.age}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="text-gray-500 hover:text-red-400 min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors"
+            aria-label={`Report or block ${user.name}`}
+            title="Report / Block"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 1v14M3 1h8l-2 3.5L11 8H3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+        </div>
       </div>
 
       {/* Photo carousel */}
@@ -96,20 +110,27 @@ export function ProfilePanel({ candidate, onApprove, onPass, onClose }: ProfileP
       </div>
 
       {/* Actions */}
-      <div className="p-4 border-t border-gray-800 space-y-2">
+      <div className="p-4 border-t border-gray-800 space-y-2 pb-safe">
         <button
           onClick={onApprove}
-          className="w-full py-3 bg-pink-500 text-white rounded-lg font-bold hover:bg-pink-600 transition-colors"
+          className="w-full py-3 min-h-[44px] bg-pink-500 text-white rounded-lg font-bold hover:bg-pink-600 transition-colors"
         >
           Send My Agent!
         </button>
         <button
           onClick={onPass}
-          className="w-full py-2 bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+          className="w-full py-2 min-h-[44px] bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 transition-colors"
         >
           Keep Looking
         </button>
       </div>
+
+      <ReportBlockModal
+        targetUserId={user.id}
+        targetName={user.name}
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+      />
     </div>
   )
 }

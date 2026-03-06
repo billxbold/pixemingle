@@ -35,7 +35,7 @@ export function TheaterControls({
   }
 
   return (
-    <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-40">
+    <div className="absolute bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-40 w-[90vw] sm:w-auto max-w-md">
       {/* Progress bar */}
       {totalSteps > 0 && (
         <div className="flex items-center gap-2">
@@ -89,7 +89,7 @@ export function TheaterControls({
                   onGenerate();
                 }}
                 disabled={rateLimitRemaining === 0}
-                className="px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-mono rounded transition-colors"
+                className="px-4 py-2 min-h-[44px] bg-pink-600 hover:bg-pink-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-mono rounded transition-colors"
               >
                 Yes, send them back!
               </button>
@@ -99,7 +99,7 @@ export function TheaterControls({
                 setShowResult(false);
                 onSubmitResult('rejected');
               }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-mono rounded transition-colors"
+              className="px-4 py-2 min-h-[44px] bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-mono rounded transition-colors"
             >
               {attemptNumber < maxAttempts ? 'No, find someone else' : 'Accept fate'}
             </button>
@@ -111,7 +111,7 @@ export function TheaterControls({
               setShowResult(false);
               onSubmitResult('accepted');
             }}
-            className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-mono rounded transition-colors w-full"
+            className="px-4 py-2 min-h-[44px] bg-green-600 hover:bg-green-500 text-white text-sm font-mono rounded transition-colors w-full"
           >
             It&apos;s a match! Move to the cafe
           </button>
@@ -128,7 +128,7 @@ export function TheaterControls({
       {!isPlaying && !isGenerating && totalSteps === 0 && (
         <button
           onClick={onGenerate}
-          className="px-6 py-3 bg-pink-600 hover:bg-pink-500 text-white font-mono rounded-lg transition-colors shadow-lg shadow-pink-500/20"
+          className="px-6 py-3 min-h-[44px] bg-pink-600 hover:bg-pink-500 text-white font-mono rounded-lg transition-colors shadow-lg shadow-pink-500/20"
         >
           Send your agent in!
         </button>
