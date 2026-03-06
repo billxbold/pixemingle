@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { FlirtScenario, FlirtStep, SoulType, User } from '@/types/database';
+import type { FlirtScenario, User } from '@/types/database';
 import { SOUL_CONFIGS } from './constants';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
