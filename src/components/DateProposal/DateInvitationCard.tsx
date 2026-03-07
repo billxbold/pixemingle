@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import type { VenueName } from '@/types/database'
-import { VENUE_INFO } from '@/types/database'
 import { VenueCard } from './VenueCard'
 
 const VENUES: VenueName[] = ['lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum']
@@ -20,7 +19,6 @@ export function DateInvitationCard({
   chaserName, venue, inviteText, onAccept, onCounter, onDecline,
 }: DateInvitationCardProps) {
   const [showPicker, setShowPicker] = useState(false)
-  const info = VENUE_INFO[venue]
 
   if (showPicker) {
     return (
