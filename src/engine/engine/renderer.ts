@@ -3,6 +3,8 @@ import type { TileType as TileTypeVal, FurnitureInstance, Character, SpriteData,
 import { getCachedSprite, getOutlineSprite } from '../sprites/spriteCache'
 import { getCharacterSprites, BUBBLE_PERMISSION_SPRITE, BUBBLE_WAITING_SPRITE } from '../sprites/spriteData'
 import { getCharacterSprite } from './characters'
+import { getFrameCoords, CHAR_FRAME_SIZE, ensureCharacterSheet } from '../sprites/spritesheetLoader'
+import type { VenueImages } from '../assetLoader'
 import { renderMatrixEffect } from './matrixEffect'
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles'
 import { hasWallSprites, getWallInstances, wallColorToHex } from '../wallTiles'
@@ -121,21 +123,71 @@ export function renderScene(
 
   // Characters
   for (const ch of characters) {
+    // Ensure async sheet load is triggered if appearance is set
+    if (ch.appearance) ensureCharacterSheet(ch)
+
+    const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0
+    const charZY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET
+
+    // PNG spritesheet path (LimeZu characters — frames span 2 rows: 48×96)
+    if (ch.sheetCanvas) {
+      const { sx, sy } = getFrameCoords(ch.state, ch.dir, ch.frame)
+      const srcH = CHAR_FRAME_SIZE * 2 // two rows per character frame
+      const dw = Math.round(CHAR_FRAME_SIZE * zoom)
+      const dh = Math.round(srcH * zoom)
+      const drawX = Math.round(offsetX + ch.x * zoom - dw / 2)
+      const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - dh)
+      const sheet = ch.sheetCanvas
+
+      // Matrix effect uses SpriteData fallback — skip PNG for now
+      if (ch.matrixEffect) {
+        const sprites = getCharacterSprites(ch.palette, ch.hueShift)
+        const spriteData = getCharacterSprite(ch, sprites)
+        const cached = getCachedSprite(spriteData, zoom)
+        const mDrawX = drawX
+        const mDrawY = drawY
+        const mCh = ch
+        drawables.push({
+          zY: charZY,
+          draw: (c) => renderMatrixEffect(c, mCh, spriteData, mDrawX, mDrawY, zoom),
+        })
+        continue
+      }
+
+      const isSelected = selectedAgentId !== null && ch.id === selectedAgentId
+      const isHovered = hoveredAgentId !== null && ch.id === hoveredAgentId
+      if (isSelected || isHovered) {
+        const outlineAlpha = isSelected ? SELECTED_OUTLINE_ALPHA : HOVERED_OUTLINE_ALPHA
+        drawables.push({
+          zY: charZY - OUTLINE_Z_SORT_OFFSET,
+          draw: (c) => {
+            c.save()
+            c.globalAlpha = outlineAlpha
+            c.strokeStyle = '#FFFFFF'
+            c.lineWidth = zoom
+            c.strokeRect(drawX - zoom, drawY - zoom, dw + zoom * 2, dh + zoom * 2)
+            c.restore()
+          },
+        })
+      }
+
+      drawables.push({
+        zY: charZY,
+        draw: (c) => {
+          c.imageSmoothingEnabled = false
+          c.drawImage(sheet, sx, sy, CHAR_FRAME_SIZE, srcH, drawX, drawY, dw, dh)
+        },
+      })
+      continue
+    }
+
+    // Fallback: SpriteData (hand-coded pixel arrays)
     const sprites = getCharacterSprites(ch.palette, ch.hueShift)
     const spriteData = getCharacterSprite(ch, sprites)
     const cached = getCachedSprite(spriteData, zoom)
-    // Sitting offset: shift character down when seated so they visually sit in the chair
-    const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0
-    // Anchor at bottom-center of character — round to integer device pixels
     const drawX = Math.round(offsetX + ch.x * zoom - cached.width / 2)
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height)
 
-    // Sort characters by bottom of their tile (not center) so they render
-    // in front of same-row furniture (e.g. chairs) but behind furniture
-    // at lower rows (e.g. desks, bookshelves that occlude from below).
-    const charZY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET
-
-    // Matrix spawn/despawn effect — skip outline, use per-pixel rendering
     if (ch.matrixEffect) {
       const mDrawX = drawX
       const mDrawY = drawY
@@ -143,24 +195,21 @@ export function renderScene(
       const mCh = ch
       drawables.push({
         zY: charZY,
-        draw: (c) => {
-          renderMatrixEffect(c, mCh, mSpriteData, mDrawX, mDrawY, zoom)
-        },
+        draw: (c) => renderMatrixEffect(c, mCh, mSpriteData, mDrawX, mDrawY, zoom),
       })
       continue
     }
 
-    // White outline: full opacity for selected, 50% for hover
     const isSelected = selectedAgentId !== null && ch.id === selectedAgentId
     const isHovered = hoveredAgentId !== null && ch.id === hoveredAgentId
     if (isSelected || isHovered) {
       const outlineAlpha = isSelected ? SELECTED_OUTLINE_ALPHA : HOVERED_OUTLINE_ALPHA
       const outlineData = getOutlineSprite(spriteData)
       const outlineCached = getCachedSprite(outlineData, zoom)
-      const olDrawX = drawX - zoom  // 1 sprite-pixel offset, scaled
-      const olDrawY = drawY - zoom  // outline follows sitting offset via drawY
+      const olDrawX = drawX - zoom
+      const olDrawY = drawY - zoom
       drawables.push({
-        zY: charZY - OUTLINE_Z_SORT_OFFSET, // sort just before character
+        zY: charZY - OUTLINE_Z_SORT_OFFSET,
         draw: (c) => {
           c.save()
           c.globalAlpha = outlineAlpha
@@ -172,9 +221,7 @@ export function renderScene(
 
     drawables.push({
       zY: charZY,
-      draw: (c) => {
-        c.drawImage(cached, drawX, drawY)
-      },
+      draw: (c) => c.drawImage(cached, drawX, drawY),
     })
   }
 
@@ -541,6 +588,7 @@ export function renderFrame(
   tileColors?: Array<FloorColor | null>,
   layoutCols?: number,
   layoutRows?: number,
+  venueImages?: VenueImages | null,
 ): { offsetX: number; offsetY: number } {
   // Clear
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
@@ -555,26 +603,39 @@ export function renderFrame(
   const offsetX = Math.floor((canvasWidth - mapW) / 2) + Math.round(panX)
   const offsetY = Math.floor((canvasHeight - mapH) / 2) + Math.round(panY)
 
-  // Draw tiles (floor + wall base color)
-  renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols)
+  if (venueImages) {
+    // Venue mode: draw premade room PNGs instead of tile grid
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(venueImages.layer1, offsetX, offsetY, mapW, mapH)
+  } else {
+    // Office/editor mode: draw tile grid
+    renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols)
+  }
 
   // Seat indicators (below furniture/characters, on top of floor)
   if (selection) {
     renderSeatIndicators(ctx, selection.seats, selection.characters, selection.selectedAgentId, selection.hoveredTile, offsetX, offsetY, zoom)
   }
 
-  // Build wall instances for z-sorting with furniture and characters
-  const wallInstances = hasWallSprites()
+  // In venue mode, no individual furniture sprites (they're in the PNG layers)
+  // In office mode, z-sort furniture with characters
+  const wallInstances = !venueImages && hasWallSprites()
     ? getWallInstances(tileMap, tileColors, layoutCols)
     : []
-  const allFurniture = wallInstances.length > 0
-    ? [...wallInstances, ...furniture]
-    : furniture
+  const allFurniture = venueImages
+    ? []
+    : wallInstances.length > 0 ? [...wallInstances, ...furniture] : furniture
 
   // Draw walls + furniture + characters (z-sorted)
   const selectedId = selection?.selectedAgentId ?? null
   const hoveredId = selection?.hoveredAgentId ?? null
   renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
+
+  // Venue foreground layer (furniture tops that appear in front of characters)
+  if (venueImages) {
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(venueImages.layer2, offsetX, offsetY, mapW, mapH)
+  }
 
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom)
