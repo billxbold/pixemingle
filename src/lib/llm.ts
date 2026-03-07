@@ -83,13 +83,25 @@ export async function generateScenario(
     ? `\nThis date takes place at: ${VENUE_INFO[venue].label} (${VENUE_INFO[venue].description}). Contextualize all actions, props, and dialogue to this venue setting.`
     : '';
 
+  // Gender-aware animation direction
+  let genderContext = '';
+  try {
+    const { getGenderTheaterPrompt } = await import('@/engine/genderAnimations');
+    genderContext = getGenderTheaterPrompt(
+      chaserProfile.gender as 'male' | 'female' | 'nonbinary',
+      gatekeeperProfile.gender as 'male' | 'female' | 'nonbinary',
+      chaserProfile.looking_for,
+      gatekeeperProfile.looking_for,
+    );
+  } catch { /* genderAnimations not available in test env */ }
+
   const prompt = `You are the Pixemingle Flirt Director. Generate a structured flirt scenario between two dating agents. Output ONLY valid JSON matching the FlirtScenario schema.
 
 The chaser agent has soul type: ${chaserProfile.soul_type} (persistence: ${chaserSoul.persistence}, drama: ${chaserSoul.drama_level}, romance: ${chaserSoul.romance_style}, humor: ${chaserSoul.humor_type})
 The gatekeeper agent has soul type: ${gatekeeperProfile.soul_type} (persistence: ${gatekeeperSoul.persistence}, drama: ${gatekeeperSoul.drama_level}, romance: ${gatekeeperSoul.romance_style}, humor: ${gatekeeperSoul.humor_type})
 
 Chaser profile: ${chaserProfile.name}, ${chaserProfile.age}, ${chaserProfile.bio || 'No bio'}, interests: ${JSON.stringify(chaserProfile.personality)}
-Gatekeeper profile: ${gatekeeperProfile.name}, ${gatekeeperProfile.age}, ${gatekeeperProfile.bio || 'No bio'}, interests: ${JSON.stringify(gatekeeperProfile.personality)}${venueContext}
+Gatekeeper profile: ${gatekeeperProfile.name}, ${gatekeeperProfile.age}, ${gatekeeperProfile.bio || 'No bio'}, interests: ${JSON.stringify(gatekeeperProfile.personality)}${venueContext}${genderContext}
 
 This is attempt #${attemptNumber}.
 Previous attempts resulted in: ${previousResults.length > 0 ? previousResults.join(', ') : 'none'}

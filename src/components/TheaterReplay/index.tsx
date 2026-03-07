@@ -11,6 +11,8 @@ interface TheaterReplayProps {
   gatekeeperAppearance: AgentAppearance | null;
   chaserPhoto: string | null;
   gatekeeperPhoto: string | null;
+  chaserGender?: 'male' | 'female' | 'nonbinary';
+  gatekeeperGender?: 'male' | 'female' | 'nonbinary';
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -67,6 +69,8 @@ export function TheaterReplay({
   gatekeeperName,
   chaserPhoto,
   gatekeeperPhoto,
+  chaserGender = 'male',
+  gatekeeperGender = 'female',
 }: TheaterReplayProps) {
   const [currentStep, setCurrentStep] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -201,7 +205,7 @@ export function TheaterReplay({
             )}
           </div>
           <span className="font-mono text-sm text-pink-400">{chaserName}</span>
-          <span className="font-mono text-xs text-gray-500 uppercase">chaser</span>
+          <span className="font-mono text-xs text-gray-500 uppercase">chaser ({chaserGender})</span>
         </div>
 
         {/* VS */}
@@ -225,7 +229,7 @@ export function TheaterReplay({
             )}
           </div>
           <span className="font-mono text-sm text-purple-400">{gatekeeperName}</span>
-          <span className="font-mono text-xs text-gray-500 uppercase">gatekeeper</span>
+          <span className="font-mono text-xs text-gray-500 uppercase">gatekeeper ({gatekeeperGender})</span>
         </div>
       </div>
 

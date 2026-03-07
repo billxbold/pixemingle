@@ -8,6 +8,9 @@ import { loadVenueImages } from '@/engine/assetLoader'
 import type { VenueImages } from '@/engine/assetLoader'
 import type { CharacterAppearance } from '@/engine/types'
 import type { AgentAppearance } from '@/types/database'
+import { ParticleSystem } from '@/engine/particles'
+import { MontagePlayer, createResearchMontage } from '@/engine/montage'
+import { PropSystem } from '@/engine/propRenderer'
 
 // Cache venue images across scene transitions
 const venueImageCache = new Map<SceneName, VenueImages>()
@@ -18,16 +21,23 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
   const sceneManagerRef = useRef<SceneManager | null>(null)
   const panRef = useRef({ x: 0, y: 0 })
   const venueImagesRef = useRef<VenueImages | null>(null)
-  const [currentScene, setCurrentScene] = useState<SceneName>('lounge')
+  const particlesRef = useRef<ParticleSystem>(new ParticleSystem())
+  const montageRef = useRef<MontagePlayer | null>(null)
+  const propsRef = useRef<PropSystem>(new PropSystem())
+  const [currentScene, setCurrentScene] = useState<SceneName>('home')
   const [zoom, setZoom] = useState(() => {
     if (typeof window === 'undefined') return 2
-    return window.innerWidth < 768 ? 1 : 2
+    // Auto-fit: home is 14×13 tiles at 48px each; pick zoom so map fills viewport
+    const mapW = 14 * 48
+    const mapH = 13 * 48
+    const fitZoom = Math.min(window.innerWidth / mapW, window.innerHeight / mapH)
+    return Math.max(1, Math.min(3, Math.round(fitZoom)))
   })
 
   // Effect 1: world init — runs once
   useEffect(() => {
     const layouts = createSceneLayouts()
-    const worldState = new WorldState(layouts.lounge)
+    const worldState = new WorldState(layouts.home)
     const sceneManager = new SceneManager(worldState, layouts)
 
     worldStateRef.current = worldState
@@ -40,7 +50,7 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
     }
     worldState.cameraFollowId = 1
 
-    loadVenueForScene('lounge')
+    loadVenueForScene('home')
 
     return () => {
       worldStateRef.current = null
@@ -79,6 +89,21 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
     loadVenueForScene(scene)
   }, [])
 
+  const playMontage = useCallback((onComplete: () => void) => {
+    const ch = worldStateRef.current?.characters.get(1)
+    if (!ch) return
+    const montage = new MontagePlayer(createResearchMontage(), particlesRef.current)
+    montage.start(ch, onComplete)
+    montageRef.current = montage
+  }, [])
+
+  // Called each frame from Canvas update loop
+  const onFrameUpdate = useCallback((dt: number) => {
+    montageRef.current?.update(dt)
+    particlesRef.current.update(dt)
+    propsRef.current.update(dt)
+  }, [])
+
   const addAgent = useCallback((id: number, palette?: number, appearance?: CharacterAppearance) => {
     const ws = worldStateRef.current
     if (!ws) return
@@ -95,10 +120,14 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
     sceneManagerRef,
     panRef,
     venueImagesRef,
+    particlesRef,
+    propsRef,
     currentScene,
     zoom,
     setZoom,
     transitionTo,
     addAgent,
+    playMontage,
+    onFrameUpdate,
   }
 }

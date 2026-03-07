@@ -1,4 +1,4 @@
-import { createServerSupabase } from '@/lib/supabase-server';
+import { getAuthUserId, createServiceClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -6,16 +6,17 @@ export async function GET(
   { params }: { params: Promise<{ matchId: string }> }
 ) {
   const { matchId } = await params;
-  const supabase = await createServerSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const userId = await getAuthUserId();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const db = createServiceClient();
 
   // Verify user is part of this match
-  const { data: match } = await supabase
+  const { data: match } = await db
     .from('matches')
     .select('*')
     .eq('id', matchId)
-    .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
     .single();
 
   if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
@@ -26,7 +27,7 @@ export async function GET(
   }
 
   // Check scenarios table for latest
-  const { data: scenario } = await supabase
+  const { data: scenario } = await db
     .from('scenarios')
     .select('*')
     .eq('match_id', matchId)

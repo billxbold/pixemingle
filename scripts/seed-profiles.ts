@@ -59,8 +59,8 @@ interface DemoProfile {
 
 // Generate a deterministic UUID-like ID from a seed number
 function demoId(n: number): string {
-  const hex = n.toString(16).padStart(4, '0')
-  return `00000000-demo-4000-a000-${hex.padStart(12, '0')}`
+  const hex = n.toString(16).padStart(12, '0')
+  return `00000000-de00-4000-a000-${hex}`
 }
 
 const PROFILES: DemoProfile[] = [

@@ -47,6 +47,8 @@ export default async function TheaterReplayPage({
       gatekeeperAppearance={(userB.agent_appearance as AgentAppearance) ?? null}
       chaserPhoto={((userA.photos as string[]) ?? [])[0] ?? null}
       gatekeeperPhoto={((userB.photos as string[]) ?? [])[0] ?? null}
+      chaserGender={((userA.gender as string) ?? 'male') as 'male' | 'female' | 'nonbinary'}
+      gatekeeperGender={((userB.gender as string) ?? 'female') as 'male' | 'female' | 'nonbinary'}
     />
   );
 }

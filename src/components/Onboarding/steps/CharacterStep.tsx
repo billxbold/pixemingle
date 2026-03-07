@@ -19,7 +19,6 @@ interface Props {
 const FRAME_SX = 0
 const FRAME_SY = 2 * 48
 const FRAME_W = 48
-const FRAME_H = 96       // LimeZu chars span 2 rows (48×96 per frame)
 const CROP_Y = 20         // skip top 20px of empty space in the 96px frame
 const CROP_H = 72         // capture 72px of character content
 const PREVIEW_W = 80

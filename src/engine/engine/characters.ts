@@ -78,6 +78,7 @@ export function createCharacter(
     emotion: 'neutral',
     propId: null,
     speechText: null,
+    speechTimer: 0,
     onStateComplete: null,
   }
 }
@@ -90,6 +91,15 @@ export function updateCharacter(
   tileMap: TileTypeVal[][],
   blockedTiles: Set<string>,
 ): void {
+  // Speech timer countdown
+  if (ch.speechTimer > 0) {
+    ch.speechTimer -= dt
+    if (ch.speechTimer <= 0) {
+      ch.speechText = null
+      ch.speechTimer = 0
+    }
+  }
+
   ch.frameTimer += dt
 
   switch (ch.state) {
@@ -392,6 +402,21 @@ export function updateCharacter(
       break
     }
 
+    case CharacterState.SOUL_GHOST_ESCAPE: {
+      // Float upward + fade out over stateDuration
+      ch.stateTimer += dt
+      ch.y -= 30 * dt  // float up 30px per second
+      ch.frameTimer += dt
+      if (ch.frameTimer >= 0.15) {
+        ch.frameTimer -= 0.15
+        ch.frame = (ch.frame + 1) % 4
+      }
+      if (ch.stateTimer >= ch.stateDuration) {
+        completeDatingState(ch)
+      }
+      break
+    }
+
     case CharacterState.WALK_AWAY: {
       // Like WALK but completes and fires callback when path is done
       if (ch.frameTimer >= WALK_FRAME_DURATION_SEC) {
@@ -443,6 +468,22 @@ function completeDatingState(ch: Character): void {
   callback?.()
 }
 
+export function triggerSoulGhostEscape(ch: Character, onComplete: () => void) {
+  ch.state = CharacterState.SOUL_GHOST_ESCAPE
+  ch.stateDuration = 2
+  ch.stateTimer = 0
+  ch.frame = 0
+  ch.emotion = 'sad'
+  ch.speechText = "Nooo..."
+  ch.speechTimer = 1.5
+  ch.onStateComplete = () => {
+    ch.emotion = 'neutral'
+    ch.speechText = null
+    ch.speechTimer = 0
+    onComplete()
+  }
+}
+
 export function getCharacterSprite(ch: Character, sprites: CharacterSprites): SpriteData {
   switch (ch.state) {
     case CharacterState.TYPE:
@@ -465,6 +506,8 @@ export function getCharacterSprite(ch: Character, sprites: CharacterSprites): Sp
       return sprites.angryKick[ch.frame % 2]
     case CharacterState.THINK:
       return sprites.think[ch.frame % 2]
+    case CharacterState.SOUL_GHOST_ESCAPE:
+      return sprites.walk[ch.dir][ch.frame % 4]
     case CharacterState.IDLE:
     default:
       return sprites.walk[ch.dir][1]

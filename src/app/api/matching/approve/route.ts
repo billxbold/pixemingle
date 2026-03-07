@@ -1,20 +1,21 @@
-import { createServerSupabase } from '@/lib/supabase-server'
+import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { sendWebhook } from '@/lib/webhooks'
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = await getAuthUserId()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = createServiceClient()
 
   const { candidate_id, score, reasons } = await request.json()
   if (!candidate_id) return NextResponse.json({ error: 'Missing candidate_id' }, { status: 400 })
 
   // Create match with pending_b status
-  const { data: match, error } = await supabase
+  const { data: match, error } = await db
     .from('matches')
     .insert({
-      user_a_id: user.id,
+      user_a_id: userId,
       user_b_id: candidate_id,
       status: 'pending_b',
       match_score: score ?? null,
@@ -27,17 +28,17 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Create notification for User B
-  await supabase.from('notifications').insert({
+  await db.from('notifications').insert({
     user_id: candidate_id,
     type: 'match_request',
     data: {
       match_id: match.id,
-      from_user_id: user.id,
+      from_user_id: userId,
     },
   })
 
   // Send webhook if candidate is an OpenClaw agent
-  const { data: agentRecord } = await supabase
+  const { data: agentRecord } = await db
     .from('openclaw_agents')
     .select('webhook_url')
     .eq('user_id', candidate_id)

@@ -1,4 +1,4 @@
-import { createServerSupabase } from '@/lib/supabase-server'
+import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { generateRejectionTexts } from '@/lib/llm'
 import type { VenueName } from '@/types/database'
@@ -10,9 +10,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: matchId } = await params
-  const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = await getAuthUserId()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = createServiceClient()
 
   const { action, venue } = await request.json()
   if (!['accept', 'counter', 'decline'].includes(action)) {
@@ -23,23 +24,23 @@ export async function POST(
   }
 
   // Verify user is gatekeeper (user_b) and match is active
-  const { data: match } = await supabase
+  const { data: match } = await db
     .from('matches')
     .select('*')
     .eq('id', matchId)
-    .eq('user_b_id', user.id)
+    .eq('user_b_id', userId)
     .eq('status', 'active')
     .single()
 
   if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
 
   if (action === 'accept') {
-    await supabase
+    await db
       .from('matches')
       .update({ final_venue: match.proposed_venue, updated_at: new Date().toISOString() })
       .eq('id', matchId)
 
-    await supabase.from('notifications').insert({
+    await db.from('notifications').insert({
       user_id: match.user_a_id,
       type: 'venue_accepted',
       data: { match_id: matchId, venue: match.proposed_venue },
@@ -49,12 +50,12 @@ export async function POST(
   }
 
   if (action === 'counter') {
-    await supabase
+    await db
       .from('matches')
       .update({ final_venue: venue, updated_at: new Date().toISOString() })
       .eq('id', matchId)
 
-    await supabase.from('notifications').insert({
+    await db.from('notifications').insert({
       user_id: match.user_a_id,
       type: 'venue_countered',
       data: { match_id: matchId, original: match.proposed_venue, chosen: venue },
@@ -65,8 +66,8 @@ export async function POST(
 
   // Decline
   const [chaserProfile, gatekeeperProfile] = await Promise.all([
-    supabase.from('users').select('*').eq('id', match.user_a_id).single(),
-    supabase.from('users').select('*').eq('id', user.id).single(),
+    db.from('users').select('*').eq('id', match.user_a_id).single(),
+    db.from('users').select('*').eq('id', userId).single(),
   ])
 
   let rejectionTexts = { rejection_text: "I'd rather not.", walkoff_text: "Back to swiping..." }
@@ -76,12 +77,12 @@ export async function POST(
     )
   }
 
-  await supabase
+  await db
     .from('matches')
     .update({ status: 'rejected', updated_at: new Date().toISOString() })
     .eq('id', matchId)
 
-  await supabase.from('notifications').insert({
+  await db.from('notifications').insert({
     user_id: match.user_a_id,
     type: 'date_declined',
     data: { match_id: matchId, ...rejectionTexts },

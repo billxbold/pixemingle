@@ -4,9 +4,13 @@ import { useRef, useEffect, useCallback } from 'react'
 import type { WorldState } from '@/engine/engine/officeState'
 import type { SceneManager } from '@/engine/sceneManager'
 import type { SelectionRenderState } from '@/engine/engine/renderer'
+import type { VenueImages } from '@/engine/assetLoader'
 import { startGameLoop } from '@/engine/engine/gameLoop'
 import { renderFrame } from '@/engine/engine/renderer'
 import { TILE_SIZE } from '@/engine/types'
+import type { ParticleSystem } from '@/engine/particles'
+import { renderParticles } from '@/engine/particles'
+import type { PropSystem } from '@/engine/propRenderer'
 import {
   CAMERA_FOLLOW_LERP,
   CAMERA_FOLLOW_SNAP_THRESHOLD,
@@ -20,6 +24,10 @@ interface CanvasProps {
   worldStateRef: React.MutableRefObject<WorldState | null>
   sceneManagerRef: React.MutableRefObject<SceneManager | null>
   panRef: React.MutableRefObject<{ x: number; y: number }>
+  venueImagesRef?: React.MutableRefObject<VenueImages | null>
+  particlesRef?: React.MutableRefObject<ParticleSystem>
+  propsRef?: React.MutableRefObject<PropSystem>
+  onFrameUpdate?: (dt: number) => void
   zoom: number
   onZoomChange: (zoom: number) => void
   onAgentClick?: (agentId: number) => void
@@ -30,6 +38,10 @@ export function Canvas({
   worldStateRef,
   sceneManagerRef,
   panRef,
+  venueImagesRef,
+  particlesRef,
+  propsRef,
+  onFrameUpdate,
   zoom,
   onZoomChange,
   onAgentClick,
@@ -40,6 +52,8 @@ export function Canvas({
   const offsetRef = useRef({ x: 0, y: 0 })
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 })
+  const leftPanStartRef = useRef<{ mouseX: number; mouseY: number; panX: number; panY: number } | null>(null)
+  const leftDraggedRef = useRef(false)
   const zoomAccumulatorRef = useRef(0)
   // Touch state refs
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null)
@@ -94,6 +108,7 @@ export function Canvas({
         if (!worldState) return
         worldState.update(dt)
         sceneManager?.update(dt)
+        onFrameUpdate?.(dt)
       },
       render: (ctx) => {
         const worldState = worldStateRef.current
@@ -146,8 +161,19 @@ export function Canvas({
           worldState.getLayout().tileColors,
           worldState.getLayout().cols,
           worldState.getLayout().rows,
+          venueImagesRef?.current,
         )
         offsetRef.current = { x: offsetX, y: offsetY }
+
+        // Particles
+        if (particlesRef?.current && particlesRef.current.particles.length > 0) {
+          renderParticles(ctx, particlesRef.current.particles, offsetX, offsetY, zoom)
+        }
+
+        // Props
+        if (propsRef?.current && propsRef.current.props.length > 0) {
+          propsRef.current.render(ctx, offsetX, offsetY, zoom)
+        }
 
         // Scene fade overlay
         if (sceneManager && sceneManager.fadeAlpha < 1) {
@@ -213,6 +239,28 @@ export function Canvas({
         return
       }
 
+      // Left-click drag pan
+      if (leftPanStartRef.current) {
+        const dx = Math.abs(e.clientX - leftPanStartRef.current.mouseX)
+        const dy = Math.abs(e.clientY - leftPanStartRef.current.mouseY)
+        if (!leftDraggedRef.current && (dx > 5 || dy > 5)) {
+          leftDraggedRef.current = true
+          worldState.cameraFollowId = null
+          const canvas = canvasRef.current
+          if (canvas) canvas.style.cursor = 'grabbing'
+        }
+        if (leftDraggedRef.current) {
+          const dpr = window.devicePixelRatio || 1
+          const ddx = (e.clientX - leftPanStartRef.current.mouseX) * dpr
+          const ddy = (e.clientY - leftPanStartRef.current.mouseY) * dpr
+          panRef.current = clampPan(
+            leftPanStartRef.current.panX + ddx,
+            leftPanStartRef.current.panY + ddy,
+          )
+          return
+        }
+      }
+
       const pos = screenToWorld(e.clientX, e.clientY)
       if (!pos) return
       const hitId = worldState.getCharacterAt(pos.worldX, pos.worldY)
@@ -231,6 +279,16 @@ export function Canvas({
     (e: React.MouseEvent) => {
       const worldState = worldStateRef.current
       if (!worldState) return
+
+      if (e.button === 0) {
+        leftPanStartRef.current = {
+          mouseX: e.clientX,
+          mouseY: e.clientY,
+          panX: panRef.current.x,
+          panY: panRef.current.y,
+        }
+        leftDraggedRef.current = false
+      }
 
       if (e.button === 1) {
         e.preventDefault()
@@ -251,6 +309,14 @@ export function Canvas({
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
+      if (e.button === 0) {
+        leftPanStartRef.current = null
+        if (leftDraggedRef.current) {
+          const canvas = canvasRef.current
+          if (canvas) canvas.style.cursor = 'default'
+          // leftDraggedRef stays true so handleClick can suppress it
+        }
+      }
       if (e.button === 1) {
         isPanningRef.current = false
         const canvas = canvasRef.current
@@ -262,6 +328,12 @@ export function Canvas({
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
+      // Suppress click if it was actually a drag
+      if (leftDraggedRef.current) {
+        leftDraggedRef.current = false
+        return
+      }
+
       const worldState = worldStateRef.current
       if (!worldState) return
 

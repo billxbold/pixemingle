@@ -1,4 +1,25 @@
 import type { SpriteData } from './types'
+import type { SceneName } from './sceneManager'
+
+export interface VenueImages {
+  layer1: HTMLImageElement
+  layer2: HTMLImageElement
+}
+
+export async function loadVenueImages(venue: SceneName): Promise<VenueImages> {
+  const load = (url: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = url
+    })
+  const [layer1, layer2] = await Promise.all([
+    load(`/sprites/venues/${venue}_layer1.png`),
+    load(`/sprites/venues/${venue}_layer2.png`),
+  ])
+  return { layer1, layer2 }
+}
 
 export async function loadSpriteSheet(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

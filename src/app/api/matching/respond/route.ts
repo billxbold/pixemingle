@@ -1,11 +1,12 @@
-import { createServerSupabase } from '@/lib/supabase-server'
+import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { sendWebhook } from '@/lib/webhooks'
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = await getAuthUserId()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = createServiceClient()
 
   const { match_id, response } = await request.json()
   if (!match_id || !['approve', 'decline'].includes(response)) {
@@ -13,11 +14,11 @@ export async function POST(request: Request) {
   }
 
   // Verify this user is user_b of the match
-  const { data: match } = await supabase
+  const { data: match } = await db
     .from('matches')
     .select('*')
     .eq('id', match_id)
-    .eq('user_b_id', user.id)
+    .eq('user_b_id', userId)
     .eq('status', 'pending_b')
     .single()
 
@@ -25,23 +26,23 @@ export async function POST(request: Request) {
 
   if (response === 'approve') {
     // Activate match
-    await supabase
+    await db
       .from('matches')
       .update({ status: 'active', updated_at: new Date().toISOString() })
       .eq('id', match_id)
 
     // Notify User A that theater is ready
-    await supabase.from('notifications').insert({
+    await db.from('notifications').insert({
       user_id: match.user_a_id,
       type: 'theater_ready',
       data: {
         match_id: match.id,
-        partner_id: user.id,
+        partner_id: userId,
       },
     })
 
     // Send webhook if user_a is an OpenClaw agent
-    const { data: agentRecord } = await supabase
+    const { data: agentRecord } = await db
       .from('openclaw_agents')
       .select('webhook_url')
       .eq('user_id', match.user_a_id)
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'active' })
   } else {
     // Reject match
-    await supabase
+    await db
       .from('matches')
       .update({ status: 'rejected', updated_at: new Date().toISOString() })
       .eq('id', match_id)

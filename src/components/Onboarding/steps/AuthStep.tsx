@@ -78,14 +78,33 @@ export function AuthStep({ onComplete }: AuthStepProps) {
         </form>
       </div>
 
-      {/* Dev skip button */}
+      {/* Dev buttons */}
       {process.env.NODE_ENV === 'development' && (
-        <button
-          onClick={skipAuth}
-          className="text-xs text-gray-600 hover:text-gray-400"
-        >
-          Skip auth (dev only)
-        </button>
+        <div className="space-y-2 pt-2 border-t border-gray-800">
+          <p className="text-xs text-gray-600 text-center">Dev shortcuts</p>
+          <div className="flex gap-2">
+            <a
+              href="/dev-login?user=alex"
+              className="flex-1 py-2 px-3 bg-blue-900 hover:bg-blue-800 text-blue-200 text-xs font-medium rounded-lg text-center transition-colors"
+            >
+              🕹️ Login as Alex<br />
+              <span className="text-blue-400 font-normal">Chaser · Bold</span>
+            </a>
+            <a
+              href="/dev-login?user=maya"
+              className="flex-1 py-2 px-3 bg-purple-900 hover:bg-purple-800 text-purple-200 text-xs font-medium rounded-lg text-center transition-colors"
+            >
+              🕹️ Login as Maya<br />
+              <span className="text-purple-400 font-normal">Gatekeeper · Intellectual</span>
+            </a>
+          </div>
+          <button
+            onClick={skipAuth}
+            className="w-full text-xs text-gray-700 hover:text-gray-500"
+          >
+            Skip auth (no session)
+          </button>
+        </div>
       )}
     </div>
   )

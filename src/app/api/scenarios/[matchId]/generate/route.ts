@@ -1,4 +1,4 @@
-import { createServerSupabase } from '@/lib/supabase-server';
+import { getAuthUserId, createServiceClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 import { generateScenario } from '@/lib/llm';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -9,24 +9,25 @@ export async function POST(
   { params }: { params: Promise<{ matchId: string }> }
 ) {
   const { matchId } = await params;
-  const supabase = await createServerSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const userId = await getAuthUserId();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const db = createServiceClient();
 
   // Load match with both user profiles
-  const { data: match } = await supabase
+  const { data: match } = await db
     .from('matches')
     .select('*, user_a:users!user_a_id(*), user_b:users!user_b_id(*)')
     .eq('id', matchId)
     .eq('status', 'active')
-    .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
     .single();
 
   if (!match) return NextResponse.json({ error: 'Active match not found' }, { status: 404 });
 
   // Rate limit check
-  const userProfile = match.user_a_id === user.id ? match.user_a : match.user_b;
-  const rateCheck = checkRateLimit(user.id, 'scenarios', userProfile.tier);
+  const userProfile = match.user_a_id === userId ? match.user_a : match.user_b;
+  const rateCheck = checkRateLimit(userId, 'scenarios', userProfile.tier);
   if (!rateCheck.allowed) {
     return NextResponse.json(
       { error: 'Rate limit exceeded', remaining: rateCheck.remaining },
@@ -38,7 +39,7 @@ export async function POST(
   const attemptNumber = match.attempt_count + 1;
 
   // Get previous results
-  const { data: previousScenarios } = await supabase
+  const { data: previousScenarios } = await db
     .from('scenarios')
     .select('scenario_data')
     .eq('match_id', matchId)
@@ -66,14 +67,14 @@ export async function POST(
     );
 
     // Save scenario to scenarios table
-    await supabase.from('scenarios').insert({
+    await db.from('scenarios').insert({
       match_id: matchId,
       attempt_number: attemptNumber,
       scenario_data: scenario,
     });
 
     // Update match attempt count and cache
-    await supabase
+    await db
       .from('matches')
       .update({
         attempt_count: attemptNumber,

@@ -14,7 +14,12 @@ const ANIM_ROWS = {
   sit2:     16,  // 4 dirs × 2 frames (sitting type 2)
   phone:    20,  // 4 dirs × 6 frames (looking at phone)
   idleAnim: 24,  // 1 row  × 6 frames (subtle breathing loop)
+  pushCart: 25,  // 4 dirs × 4 frames (pushing cart)
+  pickUp:   29,  // 4 dirs × 2 frames (pick up item)
   gift:     33,  // 4 dirs × 2 frames (giving gift/flowers)
+  lift:     37,  // 4 dirs × 2 frames (lift/hold up)
+  hit:      38,  // 4 dirs × 2 frames (hit/kick)
+  hurt:     39,  // 4 dirs × 2 frames (hurt/stumble)
 } as const
 
 const ANIM_FRAMES = {
@@ -24,7 +29,12 @@ const ANIM_FRAMES = {
   sit2:     2,
   phone:    6,
   idleAnim: 6,
+  pushCart: 4,
+  pickUp:   2,
   gift:     2,
+  lift:     2,
+  hit:      2,
+  hurt:     2,
 } as const
 
 const DIR_ROW: Record<Direction, number> = {
@@ -59,11 +69,23 @@ export function getFrameCoords(
     case CharacterState.THINK:
       return { sx: (frame % ANIM_FRAMES.phone) * fs, sy: (ANIM_ROWS.phone + d) * fs }
 
-    case CharacterState.DELIVER_LINE:
-    case CharacterState.REACT_EMOTION:
-    case CharacterState.BLUSH:
-    case CharacterState.DESPAIR:
     case CharacterState.ANGRY_KICK:
+      return { sx: (frame % ANIM_FRAMES.hit) * fs, sy: (ANIM_ROWS.hit + d) * fs }
+
+    case CharacterState.DESPAIR:
+      return { sx: (frame % ANIM_FRAMES.hurt) * fs, sy: (ANIM_ROWS.hurt + d) * fs }
+
+    case CharacterState.DELIVER_LINE:
+    case CharacterState.BLUSH:
+      return { sx: (frame % ANIM_FRAMES.gift) * fs, sy: (ANIM_ROWS.gift + d) * fs }
+
+    case CharacterState.REACT_EMOTION:
+      return { sx: (frame % ANIM_FRAMES.idleAnim) * fs, sy: ANIM_ROWS.idleAnim * fs }
+
+    case CharacterState.SOUL_GHOST_ESCAPE:
+      // Use idle frames, renderer handles alpha
+      return { sx: (frame % ANIM_FRAMES.idle) * fs, sy: (ANIM_ROWS.idle + d) * fs }
+
     case CharacterState.IDLE:
     default:
       return { sx: (frame % ANIM_FRAMES.idle) * fs, sy: (ANIM_ROWS.idle + d) * fs }

@@ -14,6 +14,9 @@ export function useScenario(
   const [venueProposal, setVenueProposal] = useState<{ venue: string; text: string } | null>(null);
   const [dateStatus, setDateStatus] = useState<'pending' | 'proposed' | 'accepted' | 'countered' | 'declined'>('pending');
   const [reactionData, setReactionData] = useState<Record<string, string> | null>(null);
+  const [nudgeShown, setNudgeShown] = useState(false);
+  const [rolesFlipped, setRolesFlipped] = useState(false);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supabase = createClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -49,6 +52,9 @@ export function useScenario(
         setDateStatus('declined');
         setReactionData(payload as Record<string, string>);
       })
+      .on('broadcast', { event: 'roles_flipped' }, () => {
+        setRolesFlipped(true);
+      })
       .subscribe();
 
     channelRef.current = channel;
@@ -57,6 +63,27 @@ export function useScenario(
       channel.unsubscribe();
     };
   }, [matchId, role, supabase]);
+
+  // Handle match expiry / status changes
+  useEffect(() => {
+    if (!matchId) return;
+    const channel = supabase
+      .channel(`match-status:${matchId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'matches',
+        filter: `id=eq.${matchId}`,
+      }, (payload) => {
+        const newStatus = (payload.new as Record<string, unknown>).status;
+        if (newStatus === 'expired' || newStatus === 'unmatched') {
+          setDateStatus('declined');
+        }
+      })
+      .subscribe();
+
+    return () => { channel.unsubscribe(); };
+  }, [matchId, supabase]);
 
   // Chaser broadcasts step advancement
   const advanceStep = useCallback(
@@ -118,6 +145,24 @@ export function useScenario(
     if (data.scenario) setScenario(data.scenario);
   }, [matchId]);
 
+  // Gatekeeper nudge timer — show nudge after 30s of waiting
+  useEffect(() => {
+    if (role !== 'gatekeeper' || dateStatus !== 'pending') return;
+    nudgeTimerRef.current = setTimeout(() => setNudgeShown(true), 30000);
+    return () => {
+      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+    };
+  }, [role, dateStatus]);
+
+  const flipRoles = useCallback(() => {
+    setRolesFlipped(true);
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'roles_flipped',
+      payload: { new_chaser: 'gatekeeper', new_gatekeeper: 'chaser' },
+    });
+  }, []);
+
   const broadcastDateProposal = useCallback((venue: string, text: string) => {
     channelRef.current?.send({
       type: 'broadcast', event: 'date_proposed', payload: { venue, text },
@@ -141,5 +186,8 @@ export function useScenario(
     reactionData,
     broadcastDateProposal,
     broadcastVenueResponse,
+    nudgeShown,
+    rolesFlipped,
+    flipRoles,
   };
 }

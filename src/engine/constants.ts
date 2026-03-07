@@ -1,18 +1,18 @@
 import type { FloorColor } from './types'
 
 // -- Grid & Layout
-export const TILE_SIZE = 16
+export const TILE_SIZE = 48
 export const DEFAULT_COLS = 20
 export const DEFAULT_ROWS = 11
 export const MAX_COLS = 64
 export const MAX_ROWS = 64
 
 // -- Character Animation
-export const WALK_SPEED_PX_PER_SEC = 48
-export const WALK_FRAME_DURATION_SEC = 0.15
+export const WALK_SPEED_PX_PER_SEC = 144
+export const WALK_FRAME_DURATION_SEC = 0.12
 export const TYPE_FRAME_DURATION_SEC = 0.3
-export const WANDER_PAUSE_MIN_SEC = 2.0
-export const WANDER_PAUSE_MAX_SEC = 20.0
+export const WANDER_PAUSE_MIN_SEC = 1.5
+export const WANDER_PAUSE_MAX_SEC = 8.0
 export const WANDER_MOVES_BEFORE_REST_MIN = 3
 export const WANDER_MOVES_BEFORE_REST_MAX = 6
 export const SEAT_REST_MIN_SEC = 120.0
@@ -33,7 +33,7 @@ export const MATRIX_TRAIL_MID_THRESHOLD = 0.33
 export const MATRIX_TRAIL_DIM_THRESHOLD = 0.66
 
 // -- Rendering
-export const CHARACTER_SITTING_OFFSET_PX = 6
+export const CHARACTER_SITTING_OFFSET_PX = 18
 export const CHARACTER_Z_SORT_OFFSET = 0.5
 export const OUTLINE_Z_SORT_OFFSET = 0.001
 export const SELECTED_OUTLINE_ALPHA = 1.0
@@ -47,8 +47,8 @@ export const BUTTON_ICON_SIZE_FACTOR = 0.45
 export const BUTTON_LINE_WIDTH_MIN = 1.5
 export const BUTTON_LINE_WIDTH_ZOOM_FACTOR = 0.5
 export const BUBBLE_FADE_DURATION_SEC = 0.5
-export const BUBBLE_SITTING_OFFSET_PX = 10
-export const BUBBLE_VERTICAL_OFFSET_PX = 24
+export const BUBBLE_SITTING_OFFSET_PX = 30
+export const BUBBLE_VERTICAL_OFFSET_PX = 72
 export const FALLBACK_FLOOR_COLOR = '#808080'
 
 // -- Rendering - Overlay Colors
@@ -91,7 +91,7 @@ export const DEFAULT_NEUTRAL_COLOR: FloorColor = { h: 0, s: 0, b: 0, c: 0 }
 // -- Dating States
 export const APPROACH_SPEED_NERVOUS = 24
 export const APPROACH_SPEED_NORMAL = 48
-export const APPROACH_SPEED_CONFIDENT = 72
+export const APPROACH_SPEED_CONFIDENT = 96
 export const DELIVER_LINE_FRAME_DURATION_SEC = 0.4
 export const REACT_EMOTION_FRAME_DURATION_SEC = 0.3
 export const CELEBRATE_FRAME_DURATION_SEC = 0.2
@@ -108,7 +108,7 @@ export const HUE_SHIFT_MIN_DEG = 45
 export const HUE_SHIFT_RANGE_DEG = 271
 export const AUTO_ON_FACING_DEPTH = 3
 export const AUTO_ON_SIDE_DEPTH = 2
-export const CHARACTER_HIT_HALF_WIDTH = 8
-export const CHARACTER_HIT_HEIGHT = 24
-export const TOOL_OVERLAY_VERTICAL_OFFSET = 32
+export const CHARACTER_HIT_HALF_WIDTH = 16
+export const CHARACTER_HIT_HEIGHT = 48
+export const TOOL_OVERLAY_VERTICAL_OFFSET = 96
 export const PULSE_ANIMATION_DURATION_SEC = 1.5

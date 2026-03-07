@@ -6,6 +6,8 @@ import { getCharacterSprite } from './characters'
 import { getFrameCoords, CHAR_FRAME_SIZE, ensureCharacterSheet } from '../sprites/spritesheetLoader'
 import type { VenueImages } from '../assetLoader'
 import { renderMatrixEffect } from './matrixEffect'
+import { renderSpeechBubbles } from '../speechBubbleRenderer'
+import { renderEmotes } from '../emoteRenderer'
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles'
 import { hasWallSprites, getWallInstances, wallColorToHex } from '../wallTiles'
 import {
@@ -129,6 +131,10 @@ export function renderScene(
     const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0
     const charZY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET
 
+    // Ghost escape: fade out based on progress
+    const isGhost = ch.state === CharacterState.SOUL_GHOST_ESCAPE
+    const ghostAlpha = isGhost ? Math.max(0, 1 - ch.stateTimer / (ch.stateDuration || 2)) : 1
+
     // PNG spritesheet path (LimeZu characters — frames span 2 rows: 48×96)
     if (ch.sheetCanvas) {
       const { sx, sy } = getFrameCoords(ch.state, ch.dir, ch.frame)
@@ -143,7 +149,7 @@ export function renderScene(
       if (ch.matrixEffect) {
         const sprites = getCharacterSprites(ch.palette, ch.hueShift)
         const spriteData = getCharacterSprite(ch, sprites)
-        const cached = getCachedSprite(spriteData, zoom)
+        getCachedSprite(spriteData, zoom) // warm cache for matrix effect
         const mDrawX = drawX
         const mDrawY = drawY
         const mCh = ch
@@ -171,11 +177,14 @@ export function renderScene(
         })
       }
 
+      const ga = ghostAlpha
       drawables.push({
         zY: charZY,
         draw: (c) => {
           c.imageSmoothingEnabled = false
+          if (ga < 1) { c.save(); c.globalAlpha = ga }
           c.drawImage(sheet, sx, sy, CHAR_FRAME_SIZE, srcH, drawX, drawY, dw, dh)
+          if (ga < 1) c.restore()
         },
       })
       continue
@@ -219,9 +228,14 @@ export function renderScene(
       })
     }
 
+    const ga2 = ghostAlpha
     drawables.push({
       zY: charZY,
-      draw: (c) => c.drawImage(cached, drawX, drawY),
+      draw: (c) => {
+        if (ga2 < 1) { c.save(); c.globalAlpha = ga2 }
+        c.drawImage(cached, drawX, drawY)
+        if (ga2 < 1) c.restore()
+      },
     })
   }
 
@@ -604,9 +618,10 @@ export function renderFrame(
   const offsetY = Math.floor((canvasHeight - mapH) / 2) + Math.round(panY)
 
   if (venueImages) {
-    // Venue mode: draw premade room PNGs instead of tile grid
+    // Venue mode: draw both PNG layers before characters so characters appear on top
     ctx.imageSmoothingEnabled = false
     ctx.drawImage(venueImages.layer1, offsetX, offsetY, mapW, mapH)
+    ctx.drawImage(venueImages.layer2, offsetX, offsetY, mapW, mapH)
   } else {
     // Office/editor mode: draw tile grid
     renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols)
@@ -626,19 +641,15 @@ export function renderFrame(
     ? []
     : wallInstances.length > 0 ? [...wallInstances, ...furniture] : furniture
 
-  // Draw walls + furniture + characters (z-sorted)
+  // Draw characters on top of venue layers
   const selectedId = selection?.selectedAgentId ?? null
   const hoveredId = selection?.hoveredAgentId ?? null
   renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
 
-  // Venue foreground layer (furniture tops that appear in front of characters)
-  if (venueImages) {
-    ctx.imageSmoothingEnabled = false
-    ctx.drawImage(venueImages.layer2, offsetX, offsetY, mapW, mapH)
-  }
-
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom)
+  renderSpeechBubbles(ctx, characters, offsetX, offsetY, zoom)
+  renderEmotes(ctx, characters, offsetX, offsetY, zoom)
 
   // Editor overlays
   if (editor) {

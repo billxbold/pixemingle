@@ -44,6 +44,7 @@ export const CharacterState = {
   ANGRY_KICK: 'angry_kick',
   BLUSH: 'blush',
   THINK: 'think',
+  SOUL_GHOST_ESCAPE: 'soul_ghost_escape',
 } as const
 export type CharacterState = (typeof CharacterState)[keyof typeof CharacterState]
 
@@ -56,6 +57,15 @@ export const Direction = {
 export type Direction = (typeof Direction)[keyof typeof Direction]
 
 export type SpriteData = string[][]
+
+export interface CharacterAppearance {
+  body: number       // 1-9 (skin tone)
+  eyes: number       // 1-7
+  outfit: string     // e.g. 'Outfit_01_48x48_01'
+  hairstyle: string  // e.g. 'Hairstyle_01_48x48_01'
+  accessory?: string
+  premadeIndex?: number // if set, use premade character PNG directly
+}
 
 export interface Seat {
   uid: string
@@ -140,6 +150,8 @@ export interface Character {
   dir: Direction
   x: number
   y: number
+  appearance?: CharacterAppearance
+  sheetCanvas?: HTMLCanvasElement | null // undefined=not requested, null=loading, canvas=ready
   tileCol: number
   tileRow: number
   path: Array<{ col: number; row: number }>
@@ -167,5 +179,6 @@ export interface Character {
   emotion: Emotion
   propId: string | null
   speechText: string | null
+  speechTimer: number
   onStateComplete: (() => void) | null
 }

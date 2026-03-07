@@ -1,6 +1,7 @@
 import type { FlirtScenario, FlirtStep } from '@/types/database';
 import type { WorldState } from './engine/officeState';
 import type { ParticleSystem } from './particles';
+import { getAnimationSet, type Gender } from './genderAnimations';
 
 export type SequencePlayerCallback = {
   onStepStart: (stepIndex: number, step: FlirtStep) => void;
@@ -58,22 +59,25 @@ export class SequencePlayer {
     this.play();
   }
 
-  /** Venue countered: "oh man" -> wardrobe drop -> outfit change */
-  static venueCounteredSteps(): FlirtStep[] {
+  /** Venue countered: gender-aware reaction sequence */
+  static venueCounteredSteps(chaserGender: Gender = 'male'): FlirtStep[] {
+    const set = getAnimationSet(chaserGender, 'chaser');
     return [
-      { agent: 'chaser', action: 'sad_slump', text: 'oh man...', duration_ms: 1500, emotion: 'sad' },
+      { agent: 'chaser', action: set.venueCountered[0] || 'sad_slump', text: 'oh man...', duration_ms: 1500, emotion: 'sad' },
       { agent: 'chaser', action: 'wardrobe_change', duration_ms: 1000, props: ['wardrobe'] },
-      { agent: 'chaser', action: 'confident_walk', text: "alright, let's go!", duration_ms: 1500, emotion: 'excited' },
+      { agent: 'chaser', action: set.venueCountered[2] || 'confident_walk', text: "alright, let's go!", duration_ms: 1500, emotion: 'excited' },
     ];
   }
 
-  /** Date declined: roast -> shock -> can kick -> sad walkoff */
-  static dateDeclinedSteps(rejectionText: string, walkoffText: string): FlirtStep[] {
+  /** Date declined: gender-aware rejection sequence */
+  static dateDeclinedSteps(rejectionText: string, walkoffText: string, chaserGender: Gender = 'male', gatekeeperGender: Gender = 'female'): FlirtStep[] {
+    const gkSet = getAnimationSet(gatekeeperGender, 'gatekeeper');
+    const chSet = getAnimationSet(chaserGender, 'chaser');
     return [
-      { agent: 'gatekeeper', action: 'eye_roll', text: rejectionText, duration_ms: 1500, emotion: 'irritated' },
+      { agent: 'gatekeeper', action: gkSet.rejected[0] || 'eye_roll', text: rejectionText, duration_ms: 1500, emotion: 'irritated' },
       { agent: 'chaser', action: 'rejected_shock', text: '...', duration_ms: 1000, emotion: 'sad' },
-      { agent: 'chaser', action: 'kick_can', duration_ms: 1000, props: ['can'] },
-      { agent: 'chaser', action: 'sad_walkoff', text: walkoffText, duration_ms: 1500, emotion: 'sad' },
+      { agent: 'chaser', action: chSet.rejected[0] || 'angry_kick', duration_ms: 1000, props: ['can'] },
+      { agent: 'chaser', action: chSet.walkoff, text: walkoffText, duration_ms: 1500, emotion: 'sad' },
     ];
   }
 
