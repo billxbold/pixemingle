@@ -11,6 +11,9 @@ export function useScenario(
   const [scenario, setScenario] = useState<FlirtScenario | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [venueProposal, setVenueProposal] = useState<{ venue: string; text: string } | null>(null);
+  const [dateStatus, setDateStatus] = useState<'pending' | 'proposed' | 'accepted' | 'countered' | 'declined'>('pending');
+  const [reactionData, setReactionData] = useState<Record<string, string> | null>(null);
   const supabase = createClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -29,6 +32,22 @@ export function useScenario(
         if (role === 'gatekeeper') {
           setCurrentStep(payload.step_index);
         }
+      })
+      .on('broadcast', { event: 'date_proposed' }, ({ payload }) => {
+        setVenueProposal(payload as { venue: string; text: string });
+        setDateStatus('proposed');
+      })
+      .on('broadcast', { event: 'venue_accepted' }, ({ payload }) => {
+        setDateStatus('accepted');
+        setReactionData(payload as Record<string, string>);
+      })
+      .on('broadcast', { event: 'venue_countered' }, ({ payload }) => {
+        setDateStatus('countered');
+        setReactionData(payload as Record<string, string>);
+      })
+      .on('broadcast', { event: 'date_declined' }, ({ payload }) => {
+        setDateStatus('declined');
+        setReactionData(payload as Record<string, string>);
       })
       .subscribe();
 
@@ -99,6 +118,16 @@ export function useScenario(
     if (data.scenario) setScenario(data.scenario);
   }, [matchId]);
 
+  const broadcastDateProposal = useCallback((venue: string, text: string) => {
+    channelRef.current?.send({
+      type: 'broadcast', event: 'date_proposed', payload: { venue, text },
+    });
+  }, []);
+
+  const broadcastVenueResponse = useCallback((event: string, payload: Record<string, unknown>) => {
+    channelRef.current?.send({ type: 'broadcast', event, payload });
+  }, []);
+
   return {
     scenario,
     currentStep,
@@ -107,5 +136,10 @@ export function useScenario(
     fetchCached,
     advanceStep,
     submitResult,
+    venueProposal,
+    dateStatus,
+    reactionData,
+    broadcastDateProposal,
+    broadcastVenueResponse,
   };
 }

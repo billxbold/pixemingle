@@ -32,5 +32,23 @@ export function useMatching() {
     setSelectedCandidate(null)
   }, [])
 
-  return { candidates, selectedCandidate, setSelectedCandidate, loading, search, approve, pass }
+  const proposeDate = useCallback(async (matchId: string, venue: string) => {
+    const res = await fetch(`/api/matches/${matchId}/propose-date`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue }),
+    })
+    return res.json()
+  }, [])
+
+  const respondVenue = useCallback(async (matchId: string, action: string, venue?: string) => {
+    const res = await fetch(`/api/matches/${matchId}/respond-venue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, venue }),
+    })
+    return res.json()
+  }, [])
+
+  return { candidates, selectedCandidate, setSelectedCandidate, loading, search, approve, pass, proposeDate, respondVenue }
 }
