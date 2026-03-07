@@ -25,6 +25,7 @@ export function CharacterPreviewCanvas({ appearance, size = 96 }: Props) {
 
     ctx.clearRect(0, 0, size, size)
 
+    // AgentAppearance (DB layer) and CharacterAppearance (engine layer) are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
         ctx.clearRect(0, 0, size, size)
