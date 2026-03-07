@@ -5,12 +5,12 @@ import { Canvas } from './Canvas'
 import type { SceneName } from '@/engine/sceneManager'
 
 const SCENE_LABELS: Record<SceneName, string> = {
-  bedroom: 'Bedroom',
-  office: 'Office',
-  gallery: 'Gallery',
-  theater: 'Theater',
-  cafe: 'Cafe',
-  park: 'Park',
+  lounge: 'Rooftop Lounge',
+  gallery: 'Art Gallery',
+  japanese: 'Japanese Restaurant',
+  icecream: 'Ice Cream Shop',
+  studio: 'Film Studio',
+  museum: 'The Museum',
 }
 
 export function PixelWorld() {

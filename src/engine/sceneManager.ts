@@ -1,7 +1,7 @@
 import { WorldState } from './engine/officeState'
 import type { OfficeLayout } from './types'
 
-export type SceneName = 'bedroom' | 'office' | 'gallery' | 'theater' | 'cafe' | 'park'
+export type SceneName = 'lounge' | 'gallery' | 'japanese' | 'icecream' | 'studio' | 'museum'
 
 export interface SceneTransition {
   from: SceneName
@@ -11,7 +11,7 @@ export interface SceneTransition {
 }
 
 export class SceneManager {
-  currentScene: SceneName = 'bedroom'
+  currentScene: SceneName = 'lounge'
   transitioning = false
   fadeAlpha = 1 // 1 = fully visible, 0 = black
   private targetScene: SceneName | null = null

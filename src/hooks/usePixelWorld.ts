@@ -10,7 +10,7 @@ export function usePixelWorld() {
   const worldStateRef = useRef<WorldState | null>(null)
   const sceneManagerRef = useRef<SceneManager | null>(null)
   const panRef = useRef({ x: 0, y: 0 })
-  const [currentScene, setCurrentScene] = useState<SceneName>('bedroom')
+  const [currentScene, setCurrentScene] = useState<SceneName>('lounge')
   const [zoom, setZoom] = useState(() => {
     if (typeof window === 'undefined') return 2
     return window.innerWidth < 768 ? 1 : 3
@@ -18,7 +18,7 @@ export function usePixelWorld() {
 
   useEffect(() => {
     const layouts = createSceneLayouts()
-    const worldState = new WorldState(layouts.bedroom)
+    const worldState = new WorldState(layouts.lounge)
     const sceneManager = new SceneManager(worldState, layouts)
 
     worldStateRef.current = worldState

@@ -16,6 +16,10 @@ const NOTIFICATION_COPY: Record<Notification['type'], string> = {
   chat_message: 'Your match sent a message at the pixel cafe',
   match_expired: 'A match timed out... your agent is crying',
   match_result: 'The theater results are in!',
+  date_proposal: 'Someone wants to take you on a date!',
+  venue_accepted: 'They said yes to the date spot!',
+  venue_countered: 'They picked a different spot — check it out!',
+  date_declined: 'They passed on the date... your agent is bummed',
 };
 
 export function useNotifications(userId: string | null) {

@@ -28,7 +28,7 @@ export default function AnimationsPage() {
 
   useEffect(() => {
     const layouts = createSceneLayouts()
-    const ws = new WorldState(layouts.theater)
+    const ws = new WorldState(layouts.studio)
     ws.addAgent(1, 0, 0, undefined, true)
     ws.addAgent(2, 1, 0, undefined, true)
     worldStateRef.current = ws
