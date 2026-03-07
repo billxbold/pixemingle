@@ -7,11 +7,12 @@ import { createSceneLayouts } from '@/engine/scenes'
 import { loadVenueImages } from '@/engine/assetLoader'
 import type { VenueImages } from '@/engine/assetLoader'
 import type { CharacterAppearance } from '@/engine/types'
+import type { AgentAppearance } from '@/types/database'
 
 // Cache venue images across scene transitions
 const venueImageCache = new Map<SceneName, VenueImages>()
 
-export function usePixelWorld(userAppearance?: import('@/types/database').AgentAppearance) {
+export function usePixelWorld(userAppearance?: AgentAppearance) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const worldStateRef = useRef<WorldState | null>(null)
   const sceneManagerRef = useRef<SceneManager | null>(null)
@@ -23,6 +24,7 @@ export function usePixelWorld(userAppearance?: import('@/types/database').AgentA
     return window.innerWidth < 768 ? 1 : 2
   })
 
+  // Effect 1: world init — runs once
   useEffect(() => {
     const layouts = createSceneLayouts()
     const worldState = new WorldState(layouts.lounge)
@@ -31,26 +33,29 @@ export function usePixelWorld(userAppearance?: import('@/types/database').AgentA
     worldStateRef.current = worldState
     sceneManagerRef.current = sceneManager
 
-    // Add a demo agent with a LimeZu premade character
     worldState.addAgent(1, 0, 0, undefined, true)
     const ch = worldState.characters.get(1)
     if (ch) {
-      const defaultAppearance: import('@/engine/types').CharacterAppearance = {
-        body: 1, eyes: 1, outfit: 'Outfit_01_48x48_01', hairstyle: 'Hairstyle_01_48x48_01', premadeIndex: 1
-      }
-      // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
-      ch.appearance = userAppearance
-        ? (userAppearance as import('@/engine/types').CharacterAppearance)
-        : defaultAppearance
+      ch.appearance = { body: 1, eyes: 1, outfit: 'Outfit_01_48x48_01', hairstyle: 'Hairstyle_01_48x48_01', premadeIndex: 1 }
     }
     worldState.cameraFollowId = 1
 
-    // Load initial venue images
     loadVenueForScene('lounge')
 
     return () => {
       worldStateRef.current = null
       sceneManagerRef.current = null
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Effect 2: apply user appearance when available
+  useEffect(() => {
+    const ch = worldStateRef.current?.characters.get(1)
+    if (!ch) return
+    if (userAppearance) {
+      // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
+      ch.appearance = userAppearance as CharacterAppearance
+      ch.sheetCanvas = undefined // reset so renderer re-requests the sheet
     }
   }, [userAppearance])
 

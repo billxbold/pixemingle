@@ -6,6 +6,7 @@ import { useScenario } from '@/hooks/useScenario'
 import { Canvas } from './Canvas'
 import { DateProposalOverlay } from './DateProposalOverlay'
 import type { SceneName } from '@/engine/sceneManager'
+import type { AgentAppearance } from '@/types/database'
 
 const SCENE_LABELS: Record<SceneName, string> = {
   lounge: 'Rooftop Lounge',
@@ -20,7 +21,7 @@ interface PixelWorldProps {
   matchId?: string | null
   role?: 'chaser' | 'gatekeeper'
   chaserName?: string
-  userAppearance?: import('@/types/database').AgentAppearance | null
+  userAppearance?: AgentAppearance | null
 }
 
 export function PixelWorld({ matchId = null, role = 'chaser', chaserName = 'Agent', userAppearance = null }: PixelWorldProps) {
