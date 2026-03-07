@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { FlirtScenario, User } from '@/types/database';
+import type { FlirtScenario, User, VenueName } from '@/types/database';
+import { VENUE_INFO } from '@/types/database';
 import { SOUL_CONFIGS } from './constants';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -15,17 +16,72 @@ const ANIMATION_ACTIONS = [
   'dramatic_entrance', 'victory_dance', 'walk_together',
   'thinking', 'determined_face', 'irritated_foot_tap',
   'put_up_sign', 'call_security',
+  'wardrobe_change', 'kick_can', 'sad_walkoff',
 ];
+
+export async function generateInviteText(
+  chaserProfile: User,
+  venue: VenueName
+): Promise<string> {
+  const soul = SOUL_CONFIGS[chaserProfile.soul_type];
+  const venueInfo = VENUE_INFO[venue];
+
+  const response = await anthropic.messages.create({
+    model: LLM_MODEL,
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: `You are a ${chaserProfile.soul_type} soul type dating agent (humor: ${soul.humor_type}, drama: ${soul.drama_level}/5). Write a 2-3 sentence date invite for "${venueInfo.label}" (${venueInfo.description}). Be fun, personalized, in-character. Name: ${chaserProfile.name}. Output ONLY the invite text, no quotes.`
+    }],
+  });
+
+  return response.content[0].type === 'text' ? response.content[0].text : 'Hey, wanna grab a bite?';
+}
+
+export async function generateRejectionTexts(
+  chaserProfile: User,
+  gatekeeperProfile: User,
+  venue: VenueName
+): Promise<{ rejection_text: string; walkoff_text: string }> {
+  const chaserSoul = SOUL_CONFIGS[chaserProfile.soul_type];
+  const gatekeeperSoul = SOUL_CONFIGS[gatekeeperProfile.soul_type];
+
+  const response = await anthropic.messages.create({
+    model: LLM_MODEL,
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: `Two dating agents. Gatekeeper (${gatekeeperProfile.soul_type}, humor: ${gatekeeperSoul.humor_type}) is rejecting Chaser (${chaserProfile.soul_type}, humor: ${chaserSoul.humor_type})'s date at "${VENUE_INFO[venue].label}".
+
+Output ONLY this JSON:
+{"rejection_text": "Gatekeeper's savage but funny rejection line (1 sentence)", "walkoff_text": "Chaser's sad funny defeated line as they walk off (1 sentence)"}`
+    }],
+  });
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      rejection_text: "I'd rather reorganize my bookshelf.",
+      walkoff_text: "Guess I'll go talk to my plants...",
+    };
+  }
+}
 
 export async function generateScenario(
   matchId: string,
   attemptNumber: number,
   chaserProfile: User,
   gatekeeperProfile: User,
-  previousResults: string[]
+  previousResults: string[],
+  venue?: VenueName
 ): Promise<FlirtScenario> {
   const chaserSoul = SOUL_CONFIGS[chaserProfile.soul_type];
   const gatekeeperSoul = SOUL_CONFIGS[gatekeeperProfile.soul_type];
+  const venueContext = venue
+    ? `\nThis date takes place at: ${VENUE_INFO[venue].label} (${VENUE_INFO[venue].description}). Contextualize all actions, props, and dialogue to this venue setting.`
+    : '';
 
   const prompt = `You are the Pixemingle Flirt Director. Generate a structured flirt scenario between two dating agents. Output ONLY valid JSON matching the FlirtScenario schema.
 
@@ -33,7 +89,7 @@ The chaser agent has soul type: ${chaserProfile.soul_type} (persistence: ${chase
 The gatekeeper agent has soul type: ${gatekeeperProfile.soul_type} (persistence: ${gatekeeperSoul.persistence}, drama: ${gatekeeperSoul.drama_level}, romance: ${gatekeeperSoul.romance_style}, humor: ${gatekeeperSoul.humor_type})
 
 Chaser profile: ${chaserProfile.name}, ${chaserProfile.age}, ${chaserProfile.bio || 'No bio'}, interests: ${JSON.stringify(chaserProfile.personality)}
-Gatekeeper profile: ${gatekeeperProfile.name}, ${gatekeeperProfile.age}, ${gatekeeperProfile.bio || 'No bio'}, interests: ${JSON.stringify(gatekeeperProfile.personality)}
+Gatekeeper profile: ${gatekeeperProfile.name}, ${gatekeeperProfile.age}, ${gatekeeperProfile.bio || 'No bio'}, interests: ${JSON.stringify(gatekeeperProfile.personality)}${venueContext}
 
 This is attempt #${attemptNumber}.
 Previous attempts resulted in: ${previousResults.length > 0 ? previousResults.join(', ') : 'none'}
