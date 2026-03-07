@@ -35,27 +35,29 @@ const SpriteThumb = memo(function SpriteThumb({ appearance, selected, onClick }:
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    let cancelled = false
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, THUMB_W, THUMB_H)
-    // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
-        if (cancelled) return
-        ctx.clearRect(0, 0, THUMB_W, THUMB_H)
-        ctx.imageSmoothingEnabled = false
-        // Draw 2-row frame, cropped to character content
-        ctx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, THUMB_W, THUMB_H)
+        const c = canvasRef.current
+        if (!c) return
+        const cx = c.getContext('2d')
+        if (!cx) return
+        cx.clearRect(0, 0, THUMB_W, THUMB_H)
+        cx.imageSmoothingEnabled = false
+        cx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, THUMB_W, THUMB_H)
       })
       .catch(() => {
-        if (cancelled) return
-        ctx.fillStyle = '#ec4899'
-        ctx.fillRect(4, 4, 32, 52)
+        const c = canvasRef.current
+        if (!c) return
+        const cx = c.getContext('2d')
+        if (!cx) return
+        cx.fillStyle = '#ec4899'
+        cx.fillRect(4, 4, 32, 52)
       })
-    return () => { cancelled = true }
   }, [appearance])
 
   return (
@@ -83,27 +85,29 @@ export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
   const bigCanvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    let cancelled = false
     const canvas = bigCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H)
-    // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
-        if (cancelled) return
-        ctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H)
-        ctx.imageSmoothingEnabled = false
-        // Draw 2-row frame, cropped to character content
-        ctx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, PREVIEW_W, PREVIEW_H)
+        const c = bigCanvasRef.current
+        if (!c) return
+        const cx = c.getContext('2d')
+        if (!cx) return
+        cx.clearRect(0, 0, PREVIEW_W, PREVIEW_H)
+        cx.imageSmoothingEnabled = false
+        cx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, PREVIEW_W, PREVIEW_H)
       })
       .catch(() => {
-        if (cancelled) return
-        ctx.fillStyle = '#ec4899'
-        ctx.fillRect(PREVIEW_W * 0.2, PREVIEW_H * 0.1, PREVIEW_W * 0.6, PREVIEW_H * 0.8)
+        const c = bigCanvasRef.current
+        if (!c) return
+        const cx = c.getContext('2d')
+        if (!cx) return
+        cx.fillStyle = '#ec4899'
+        cx.fillRect(PREVIEW_W * 0.2, PREVIEW_H * 0.1, PREVIEW_W * 0.6, PREVIEW_H * 0.8)
       })
-    return () => { cancelled = true }
   }, [appearance])
 
   const select = (next: AgentAppearance) => {

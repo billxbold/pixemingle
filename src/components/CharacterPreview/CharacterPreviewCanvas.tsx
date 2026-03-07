@@ -28,16 +28,23 @@ export function CharacterPreviewCanvas({ appearance, width = 80, height = 120 }:
 
     ctx.clearRect(0, 0, width, height)
 
-    // AgentAppearance (DB layer) and CharacterAppearance (engine layer) are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
-        ctx.clearRect(0, 0, width, height)
-        ctx.imageSmoothingEnabled = false
-        ctx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, width, height)
+        const c = canvasRef.current
+        if (!c) return
+        const cx = c.getContext('2d')
+        if (!cx) return
+        cx.clearRect(0, 0, width, height)
+        cx.imageSmoothingEnabled = false
+        cx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, width, height)
       })
       .catch(() => {
-        ctx.fillStyle = '#ec4899'
-        ctx.fillRect(width * 0.2, height * 0.1, width * 0.6, height * 0.8)
+        const c = canvasRef.current
+        if (!c) return
+        const cx = c.getContext('2d')
+        if (!cx) return
+        cx.fillStyle = '#ec4899'
+        cx.fillRect(width * 0.2, height * 0.1, width * 0.6, height * 0.8)
       })
   }, [appearance, width, height])
 
