@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import type { OnboardingData } from '../OnboardingWizard'
 import type { AgentAppearance } from '@/types/database'
 import type { CharacterAppearance } from '@/engine/types'
@@ -22,7 +22,7 @@ const FRAME_SIZE = 48
 const PREVIEW_SIZE = 96
 const THUMB_SIZE = 48
 
-function SpriteThumb({ appearance, selected, onClick }: {
+const SpriteThumb = memo(function SpriteThumb({ appearance, selected, onClick }: {
   appearance: AgentAppearance
   selected: boolean
   onClick: () => void
@@ -30,6 +30,7 @@ function SpriteThumb({ appearance, selected, onClick }: {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
+    let cancelled = false
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -38,14 +39,17 @@ function SpriteThumb({ appearance, selected, onClick }: {
     // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
+        if (cancelled) return
         ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
         ctx.imageSmoothingEnabled = false
         ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, THUMB_SIZE, THUMB_SIZE)
       })
       .catch(() => {
+        if (cancelled) return
         ctx.fillStyle = '#ec4899'
         ctx.fillRect(8, 4, 32, 40)
       })
+    return () => { cancelled = true }
   }, [appearance])
 
   return (
@@ -63,7 +67,7 @@ function SpriteThumb({ appearance, selected, onClick }: {
       />
     </button>
   )
-}
+})
 
 export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
   const [tab, setTab] = useState<'premade' | 'custom'>('premade')
@@ -73,6 +77,7 @@ export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
   const bigCanvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
+    let cancelled = false
     const canvas = bigCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -81,14 +86,17 @@ export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
     // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
+        if (cancelled) return
         ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
         ctx.imageSmoothingEnabled = false
         ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
       })
       .catch(() => {
+        if (cancelled) return
         ctx.fillStyle = '#ec4899'
         ctx.fillRect(PREVIEW_SIZE * 0.2, PREVIEW_SIZE * 0.1, PREVIEW_SIZE * 0.6, PREVIEW_SIZE * 0.8)
       })
+    return () => { cancelled = true }
   }, [appearance])
 
   const select = (next: AgentAppearance) => {
