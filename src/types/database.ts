@@ -22,6 +22,17 @@ export interface User {
 
 export type SoulType = 'romantic' | 'funny' | 'bold' | 'intellectual';
 
+export type VenueName = 'lounge' | 'gallery' | 'japanese' | 'icecream' | 'studio' | 'museum';
+
+export const VENUE_INFO: Record<VenueName, { label: string; vibe: string; description: string }> = {
+  lounge: { label: 'Rooftop Lounge', vibe: 'Chill & Classy', description: 'Upscale rooftop with ambient lighting and plush sofas' },
+  gallery: { label: 'Art Gallery', vibe: 'Creative Date', description: 'White-walled gallery with paintings and sculptures' },
+  japanese: { label: 'Japanese Restaurant', vibe: 'Romantic Evening', description: 'Intimate spot with low tables, lanterns, and ramen' },
+  icecream: { label: 'Ice Cream Shop', vibe: 'Sweet & Casual', description: 'Colorful shop with sundaes and window seats' },
+  studio: { label: 'Film Studio', vibe: 'Quirky Adventure', description: 'Behind-the-scenes set with cameras and spotlights' },
+  museum: { label: 'The Museum', vibe: 'Intellectual Vibes', description: 'Grand halls with exhibits and quiet corners' },
+};
+
 export interface PersonalityAnswers {
   friday_night: string;
   argue_style: string;
@@ -52,6 +63,9 @@ export interface Match {
   match_reasons: MatchReasons | null;
   scenario_cache: FlirtScenario | null;
   attempt_count: number;
+  proposed_venue: VenueName | null;
+  final_venue: VenueName | null;
+  venue_proposal_text: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,7 +108,8 @@ export type AnimationAction =
   | 'flower_offer' | 'flower_accept' | 'flower_throw'
   | 'dramatic_entrance' | 'victory_dance' | 'walk_together'
   | 'thinking' | 'determined_face' | 'irritated_foot_tap'
-  | 'put_up_sign' | 'call_security';
+  | 'put_up_sign' | 'call_security'
+  | 'wardrobe_change' | 'kick_can' | 'sad_walkoff';
 
 export type Emotion = 'neutral' | 'happy' | 'sad' | 'angry' | 'nervous' | 'excited' | 'bored' | 'irritated';
 
@@ -117,7 +132,7 @@ export interface ChatMessage {
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'match_request' | 'theater_ready' | 'chat_message' | 'match_expired' | 'match_result';
+  type: 'match_request' | 'theater_ready' | 'chat_message' | 'match_expired' | 'match_result' | 'date_proposal' | 'venue_accepted' | 'venue_countered' | 'date_declined';
   data: Record<string, unknown>;
   read: boolean;
   created_at: string;
