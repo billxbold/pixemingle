@@ -2,7 +2,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 import { generateScenario } from '@/lib/llm';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { User } from '@/types/database';
+import type { User, VenueName } from '@/types/database';
 
 export async function POST(
   _request: Request,
@@ -55,12 +55,14 @@ export async function POST(
   const gatekeeper = chaser === userA ? userB : userA;
 
   try {
+    const venue = match.final_venue as VenueName | undefined;
     const scenario = await generateScenario(
       matchId,
       attemptNumber,
       chaser,
       gatekeeper,
-      previousResults
+      previousResults,
+      venue
     );
 
     // Save scenario to scenarios table

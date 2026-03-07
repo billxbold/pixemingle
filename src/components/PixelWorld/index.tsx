@@ -1,7 +1,10 @@
 'use client'
 
 import { usePixelWorld } from '@/hooks/usePixelWorld'
+import { useMatching } from '@/hooks/useMatching'
+import { useScenario } from '@/hooks/useScenario'
 import { Canvas } from './Canvas'
+import { DateProposalOverlay } from './DateProposalOverlay'
 import type { SceneName } from '@/engine/sceneManager'
 
 const SCENE_LABELS: Record<SceneName, string> = {
@@ -13,7 +16,13 @@ const SCENE_LABELS: Record<SceneName, string> = {
   museum: 'The Museum',
 }
 
-export function PixelWorld() {
+interface PixelWorldProps {
+  matchId?: string | null
+  role?: 'chaser' | 'gatekeeper'
+  chaserName?: string
+}
+
+export function PixelWorld({ matchId = null, role = 'chaser', chaserName = 'Agent' }: PixelWorldProps) {
   const {
     worldStateRef,
     sceneManagerRef,
@@ -24,6 +33,14 @@ export function PixelWorld() {
     transitionTo,
   } = usePixelWorld()
 
+  const { proposeDate, respondVenue } = useMatching()
+  const {
+    dateStatus,
+    venueProposal,
+    broadcastDateProposal,
+    broadcastVenueResponse,
+  } = useScenario(matchId, role)
+
   return (
     <div className="relative w-full h-dvh bg-black overflow-hidden">
       <Canvas
@@ -33,7 +50,23 @@ export function PixelWorld() {
         zoom={zoom}
         onZoomChange={setZoom}
       />
-      {/* Scene nav (dev overlay — will be replaced with proper UI) */}
+
+      {/* Date proposal overlay */}
+      {matchId && (
+        <DateProposalOverlay
+          matchId={matchId}
+          role={role}
+          dateStatus={dateStatus}
+          venueProposal={venueProposal}
+          chaserName={chaserName}
+          onPropose={proposeDate}
+          onRespond={respondVenue}
+          onBroadcastProposal={broadcastDateProposal}
+          onBroadcastResponse={broadcastVenueResponse}
+        />
+      )}
+
+      {/* Scene nav (dev overlay) */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1 sm:gap-2 flex-wrap justify-center max-w-[95vw] px-2">
         {(Object.keys(SCENE_LABELS) as SceneName[]).map((scene) => (
           <button
