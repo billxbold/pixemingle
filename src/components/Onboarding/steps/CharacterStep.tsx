@@ -11,27 +11,19 @@ interface CharacterStepProps {
   onBack: () => void
 }
 
-const BODY_TYPES = [0, 1, 2]
-const SKIN_TONES = [0, 1, 2, 3, 4, 5, 6, 7]
-const HAIR_STYLES = [0, 1, 2, 3, 4]
-const HAIR_COLORS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-const TOPS = [0, 1, 2, 3, 4]
-const BOTTOMS = [0, 1, 2, 3]
+// TODO (Task 4): This component will be fully rewritten with the LimeZu sprite picker.
+// Minimal stub to satisfy the new AgentAppearance shape.
 
-const SKIN_HEX = ['#FFDBB4', '#EDB98A', '#D08B5B', '#AE5D29', '#694825', '#3C2415', '#FFE0BD', '#F1C27D']
-const HAIR_HEX = ['#2C1810', '#5A3825', '#8B6914', '#C19A6B', '#E6BE8A', '#B7410E', '#8B0000', '#4B0082', '#FF69B4', '#00CED1']
+const DEFAULT_APPEARANCE: AgentAppearance = {
+  body: 1,
+  eyes: 1,
+  outfit: 'Outfit_01_48x48_01',
+  hairstyle: 'Hairstyle_01_48x48_01',
+}
 
 export function CharacterStep({ data, onChange, onNext, onBack }: CharacterStepProps) {
   const [appearance, setAppearance] = useState<AgentAppearance>(
-    data.agent_appearance ?? {
-      body: 0,
-      skinTone: 0,
-      hair: 0,
-      hairColor: 0,
-      top: 0,
-      bottom: 0,
-      accessories: [],
-    }
+    data.agent_appearance ?? DEFAULT_APPEARANCE
   )
 
   const update = (partial: Partial<AgentAppearance>) => {
@@ -47,27 +39,19 @@ export function CharacterStep({ data, onChange, onNext, onBack }: CharacterStepP
         <p className="text-sm text-gray-400 mt-1">This pixel buddy represents you</p>
       </div>
 
-      {/* Preview placeholder */}
+      {/* Preview placeholder — replaced in Task 4 */}
       <div className="flex justify-center">
         <div className="w-24 h-24 bg-gray-800 rounded-lg border-2 border-gray-700 flex items-center justify-center">
-          <div
-            className="w-8 h-12 rounded-sm"
-            style={{ backgroundColor: SKIN_HEX[appearance.skinTone] }}
-          >
-            <div
-              className="w-8 h-4 rounded-t-sm"
-              style={{ backgroundColor: HAIR_HEX[appearance.hairColor] }}
-            />
-          </div>
+          <span className="text-xs text-gray-500">Preview</span>
         </div>
       </div>
 
       <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
-        {/* Body Type */}
+        {/* Body (1-9) */}
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Body Type</label>
+          <label className="block text-xs text-gray-400 mb-1">Body Type ({appearance.body}/9)</label>
           <div className="flex gap-2">
-            {BODY_TYPES.map(b => (
+            {[1,2,3,4,5,6,7,8,9].map(b => (
               <button
                 key={b}
                 onClick={() => update({ body: b })}
@@ -75,95 +59,25 @@ export function CharacterStep({ data, onChange, onNext, onBack }: CharacterStepP
                   appearance.body === b ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
                 }`}
               >
-                Type {b + 1}
+                {b}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Skin Tone */}
+        {/* Eyes (1-7) */}
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Skin Tone</label>
-          <div className="flex gap-1.5">
-            {SKIN_TONES.map(s => (
-              <button
-                key={s}
-                onClick={() => update({ skinTone: s })}
-                className={`w-8 h-8 rounded-full border-2 transition-colors ${
-                  appearance.skinTone === s ? 'border-pink-500' : 'border-transparent'
-                }`}
-                style={{ backgroundColor: SKIN_HEX[s] }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Hair Style */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Hair Style</label>
+          <label className="block text-xs text-gray-400 mb-1">Eyes ({appearance.eyes}/7)</label>
           <div className="flex gap-2">
-            {HAIR_STYLES.map(h => (
+            {[1,2,3,4,5,6,7].map(e => (
               <button
-                key={h}
-                onClick={() => update({ hair: h })}
+                key={e}
+                onClick={() => update({ eyes: e })}
                 className={`flex-1 py-2 rounded text-xs ${
-                  appearance.hair === h ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
+                  appearance.eyes === e ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
                 }`}
               >
-                {['Classic', 'Wavy', 'Short', 'Long', 'Curly'][h]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Hair Color */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Hair Color</label>
-          <div className="flex gap-1.5 flex-wrap">
-            {HAIR_COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => update({ hairColor: c })}
-                className={`w-7 h-7 rounded-full border-2 transition-colors ${
-                  appearance.hairColor === c ? 'border-pink-500' : 'border-transparent'
-                }`}
-                style={{ backgroundColor: HAIR_HEX[c] }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Top */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Top</label>
-          <div className="flex gap-2 flex-wrap">
-            {TOPS.map(t => (
-              <button
-                key={t}
-                onClick={() => update({ top: t })}
-                className={`py-2 px-3 rounded text-xs ${
-                  appearance.top === t ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
-                }`}
-              >
-                {['T-Shirt', 'Hoodie', 'Blouse', 'Sweater', 'Tank'][t]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Bottom</label>
-          <div className="flex gap-2">
-            {BOTTOMS.map(b => (
-              <button
-                key={b}
-                onClick={() => update({ bottom: b })}
-                className={`flex-1 py-2 rounded text-xs ${
-                  appearance.bottom === b ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
-                }`}
-              >
-                {['Jeans', 'Skirt', 'Shorts', 'Slacks'][b]}
+                {e}
               </button>
             ))}
           </div>

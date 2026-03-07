@@ -45,13 +45,12 @@ export interface PersonalityAnswers {
 }
 
 export interface AgentAppearance {
-  body: number;
-  skinTone: number;
-  hair: number;
-  hairColor: number;
-  top: number;
-  bottom: number;
-  accessories: string[];
+  body: number        // 1-9 (skin tone/body type)
+  eyes: number        // 1-7
+  outfit: string      // e.g. 'Outfit_01_48x48_01'
+  hairstyle: string   // e.g. 'Hairstyle_01_48x48_01'
+  accessory?: string
+  premadeIndex?: number // if set, use premade PNG directly
 }
 
 export interface Match {
