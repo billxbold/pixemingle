@@ -1,88 +1,216 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { OnboardingData } from '../OnboardingWizard'
 import type { AgentAppearance } from '@/types/database'
+import type { CharacterAppearance } from '@/engine/types'
+import { buildCharacterSheet } from '@/engine/sprites/spritesheetLoader'
+import {
+  PREMADE_COUNT, BODY_COUNT, EYES_COUNT, OUTFITS, HAIRSTYLES, DEFAULT_APPEARANCE,
+} from '@/lib/characterAssets'
 
-interface CharacterStepProps {
+interface Props {
   data: OnboardingData
   onChange: (partial: Partial<OnboardingData>) => void
   onNext: () => void
   onBack: () => void
 }
 
-// TODO (Task 4): This component will be fully rewritten with the LimeZu sprite picker.
-// Minimal stub to satisfy the new AgentAppearance shape.
+const FRAME_SX = 0
+const FRAME_SY = 2 * 48
+const FRAME_SIZE = 48
+const PREVIEW_SIZE = 96
+const THUMB_SIZE = 48
 
-const DEFAULT_APPEARANCE: AgentAppearance = {
-  body: 1,
-  eyes: 1,
-  outfit: 'Outfit_01_48x48_01',
-  hairstyle: 'Hairstyle_01_48x48_01',
+function SpriteThumb({ appearance, selected, onClick }: {
+  appearance: AgentAppearance
+  selected: boolean
+  onClick: () => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
+    // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
+    buildCharacterSheet(appearance as CharacterAppearance)
+      .then(sheet => {
+        ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, THUMB_SIZE, THUMB_SIZE)
+      })
+      .catch(() => {
+        ctx.fillStyle = '#ec4899'
+        ctx.fillRect(8, 4, 32, 40)
+      })
+  }, [appearance])
+
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded border-2 transition-colors p-0.5 bg-gray-900 ${
+        selected ? 'border-pink-500' : 'border-gray-700 hover:border-gray-500'
+      }`}
+    >
+      <canvas
+        ref={canvasRef}
+        width={THUMB_SIZE}
+        height={THUMB_SIZE}
+        style={{ imageRendering: 'pixelated', display: 'block', width: THUMB_SIZE, height: THUMB_SIZE }}
+      />
+    </button>
+  )
 }
 
-export function CharacterStep({ data, onChange, onNext, onBack }: CharacterStepProps) {
+export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
+  const [tab, setTab] = useState<'premade' | 'custom'>('premade')
   const [appearance, setAppearance] = useState<AgentAppearance>(
     data.agent_appearance ?? DEFAULT_APPEARANCE
   )
+  const bigCanvasRef = useRef<HTMLCanvasElement>(null)
 
-  const update = (partial: Partial<AgentAppearance>) => {
-    const next = { ...appearance, ...partial }
+  useEffect(() => {
+    const canvas = bigCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
+    buildCharacterSheet(appearance as CharacterAppearance)
+      .then(sheet => {
+        ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+      })
+      .catch(() => {
+        ctx.fillStyle = '#ec4899'
+        ctx.fillRect(PREVIEW_SIZE * 0.2, PREVIEW_SIZE * 0.1, PREVIEW_SIZE * 0.6, PREVIEW_SIZE * 0.8)
+      })
+  }, [appearance])
+
+  const select = (next: AgentAppearance) => {
     setAppearance(next)
     onChange({ agent_appearance: next })
   }
 
+  const updateCustom = (partial: Partial<AgentAppearance>) => {
+    const next: AgentAppearance = { ...appearance, premadeIndex: undefined, ...partial }
+    select(next)
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="text-center">
         <h2 className="text-2xl font-bold">Create your Agent</h2>
-        <p className="text-sm text-gray-400 mt-1">This pixel buddy represents you</p>
+        <p className="text-sm text-gray-400 mt-1">This pixel buddy represents you in the world</p>
       </div>
 
-      {/* Preview placeholder — replaced in Task 4 */}
+      {/* Big preview */}
       <div className="flex justify-center">
-        <div className="w-24 h-24 bg-gray-800 rounded-lg border-2 border-gray-700 flex items-center justify-center">
-          <span className="text-xs text-gray-500">Preview</span>
+        <div className="bg-gray-900 rounded-xl border border-gray-700 p-3">
+          <canvas
+            ref={bigCanvasRef}
+            width={PREVIEW_SIZE}
+            height={PREVIEW_SIZE}
+            style={{ imageRendering: 'pixelated', display: 'block', width: PREVIEW_SIZE, height: PREVIEW_SIZE }}
+          />
         </div>
       </div>
 
-      <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
-        {/* Body (1-9) */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Body Type ({appearance.body}/9)</label>
-          <div className="flex gap-2">
-            {[1,2,3,4,5,6,7,8,9].map(b => (
-              <button
-                key={b}
-                onClick={() => update({ body: b })}
-                className={`flex-1 py-2 rounded text-xs ${
-                  appearance.body === b ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
-                }`}
-              >
-                {b}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Eyes (1-7) */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Eyes ({appearance.eyes}/7)</label>
-          <div className="flex gap-2">
-            {[1,2,3,4,5,6,7].map(e => (
-              <button
-                key={e}
-                onClick={() => update({ eyes: e })}
-                className={`flex-1 py-2 rounded text-xs ${
-                  appearance.eyes === e ? 'bg-pink-500 text-white' : 'bg-gray-800 text-gray-300'
-                }`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-900 rounded-lg p-1">
+        {(['premade', 'custom'] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 rounded text-sm font-medium transition-colors ${
+              tab === t ? 'bg-pink-500 text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            {t === 'premade' ? 'Premade (20)' : 'Custom'}
+          </button>
+        ))}
       </div>
+
+      {/* Premade grid */}
+      {tab === 'premade' && (
+        <div className="max-h-[35vh] overflow-y-auto pr-1">
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: PREMADE_COUNT }, (_, i) => i + 1).map(n => (
+              <SpriteThumb
+                key={n}
+                appearance={{ premadeIndex: n, body: 1, eyes: 1, outfit: OUTFITS[0], hairstyle: HAIRSTYLES[0] }}
+                selected={appearance.premadeIndex === n}
+                onClick={() => select({ premadeIndex: n, body: 1, eyes: 1, outfit: OUTFITS[0], hairstyle: HAIRSTYLES[0] })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Custom layered picker */}
+      {tab === 'custom' && (
+        <div className="space-y-4 max-h-[35vh] overflow-y-auto pr-1">
+          <div>
+            <label className="block text-xs text-gray-400 mb-2">Body / Skin Tone</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {Array.from({ length: BODY_COUNT }, (_, i) => i + 1).map(b => (
+                <SpriteThumb
+                  key={b}
+                  appearance={{ ...appearance, premadeIndex: undefined, body: b }}
+                  selected={!appearance.premadeIndex && appearance.body === b}
+                  onClick={() => updateCustom({ body: b })}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-2">Eyes</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {Array.from({ length: EYES_COUNT }, (_, i) => i + 1).map(e => (
+                <SpriteThumb
+                  key={e}
+                  appearance={{ ...appearance, premadeIndex: undefined, eyes: e }}
+                  selected={!appearance.premadeIndex && appearance.eyes === e}
+                  onClick={() => updateCustom({ eyes: e })}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-2">Outfit ({OUTFITS.length} options)</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {OUTFITS.map(o => (
+                <SpriteThumb
+                  key={o}
+                  appearance={{ ...appearance, premadeIndex: undefined, outfit: o }}
+                  selected={!appearance.premadeIndex && appearance.outfit === o}
+                  onClick={() => updateCustom({ outfit: o })}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-2">Hairstyle ({HAIRSTYLES.length} options)</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {HAIRSTYLES.map(h => (
+                <SpriteThumb
+                  key={h}
+                  appearance={{ ...appearance, premadeIndex: undefined, hairstyle: h }}
+                  selected={!appearance.premadeIndex && appearance.hairstyle === h}
+                  onClick={() => updateCustom({ hairstyle: h })}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <button
