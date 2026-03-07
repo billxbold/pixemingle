@@ -7,6 +7,8 @@ export type SequencePlayerCallback = {
   onStepEnd: (stepIndex: number) => void;
   onComplete: (result: string) => void;
   onSpeechBubble: (agent: string, text: string) => void;
+  onPropSpawn?: (propId: string, x: number, y: number) => void;
+  onPropDespawn?: (propId: string) => void;
 };
 
 export class SequencePlayer {
@@ -35,6 +37,44 @@ export class SequencePlayer {
   setChaserAndGatekeeper(chaserId: number, gatekeeperId: number) {
     this.chaserId = chaserId;
     this.gatekeeperId = gatekeeperId;
+  }
+
+  /** Play a hardcoded mini-sequence before the main scenario */
+  playReaction(steps: FlirtStep[], onDone: () => void) {
+    const reactionScenario: FlirtScenario = {
+      match_id: '',
+      attempt_number: 0,
+      soul_type_a: 'funny',
+      soul_type_b: 'funny',
+      steps,
+      result: 'pending',
+    };
+    this.load(reactionScenario);
+    const origOnComplete = this.callbacks.onComplete;
+    this.callbacks.onComplete = () => {
+      this.callbacks.onComplete = origOnComplete;
+      onDone();
+    };
+    this.play();
+  }
+
+  /** Venue countered: "oh man" -> wardrobe drop -> outfit change */
+  static venueCounteredSteps(): FlirtStep[] {
+    return [
+      { agent: 'chaser', action: 'sad_slump', text: 'oh man...', duration_ms: 1500, emotion: 'sad' },
+      { agent: 'chaser', action: 'wardrobe_change', duration_ms: 1000, props: ['wardrobe'] },
+      { agent: 'chaser', action: 'confident_walk', text: "alright, let's go!", duration_ms: 1500, emotion: 'excited' },
+    ];
+  }
+
+  /** Date declined: roast -> shock -> can kick -> sad walkoff */
+  static dateDeclinedSteps(rejectionText: string, walkoffText: string): FlirtStep[] {
+    return [
+      { agent: 'gatekeeper', action: 'eye_roll', text: rejectionText, duration_ms: 1500, emotion: 'irritated' },
+      { agent: 'chaser', action: 'rejected_shock', text: '...', duration_ms: 1000, emotion: 'sad' },
+      { agent: 'chaser', action: 'kick_can', duration_ms: 1000, props: ['can'] },
+      { agent: 'chaser', action: 'sad_walkoff', text: walkoffText, duration_ms: 1500, emotion: 'sad' },
+    ];
   }
 
   load(scenario: FlirtScenario) {
@@ -81,6 +121,16 @@ export class SequencePlayer {
     // Show speech bubble
     if (step.text) {
       this.callbacks.onSpeechBubble(step.agent, step.text);
+    }
+
+    // Spawn props at character position
+    if (step.props?.length && agentId) {
+      const ch = this.worldState.characters.get(agentId);
+      if (ch) {
+        for (const prop of step.props) {
+          this.callbacks.onPropSpawn?.(prop, ch.x, ch.y);
+        }
+      }
     }
 
     // Spawn particles based on emotion
