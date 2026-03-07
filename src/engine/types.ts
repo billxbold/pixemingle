@@ -39,6 +39,11 @@ export const CharacterState = {
   USE_PROP: 'use_prop',
   CELEBRATE: 'celebrate',
   DESPAIR: 'despair',
+  // Reaction states
+  WALK_AWAY: 'walk_away',
+  ANGRY_KICK: 'angry_kick',
+  BLUSH: 'blush',
+  THINK: 'think',
 } as const
 export type CharacterState = (typeof CharacterState)[keyof typeof CharacterState]
 

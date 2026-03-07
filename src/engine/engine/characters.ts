@@ -355,6 +355,78 @@ export function updateCharacter(
       }
       break
     }
+
+    case CharacterState.ANGRY_KICK: {
+      if (ch.frameTimer >= REACT_EMOTION_FRAME_DURATION_SEC) {
+        ch.frameTimer -= REACT_EMOTION_FRAME_DURATION_SEC
+        ch.frame = (ch.frame + 1) % 2
+      }
+      ch.stateTimer += dt
+      if (ch.stateTimer >= ch.stateDuration) {
+        completeDatingState(ch)
+      }
+      break
+    }
+
+    case CharacterState.BLUSH: {
+      if (ch.frameTimer >= REACT_EMOTION_FRAME_DURATION_SEC) {
+        ch.frameTimer -= REACT_EMOTION_FRAME_DURATION_SEC
+        ch.frame = (ch.frame + 1) % 2
+      }
+      ch.stateTimer += dt
+      if (ch.stateTimer >= ch.stateDuration) {
+        completeDatingState(ch)
+      }
+      break
+    }
+
+    case CharacterState.THINK: {
+      if (ch.frameTimer >= TYPE_FRAME_DURATION_SEC) {
+        ch.frameTimer -= TYPE_FRAME_DURATION_SEC
+        ch.frame = (ch.frame + 1) % 2
+      }
+      ch.stateTimer += dt
+      if (ch.stateTimer >= ch.stateDuration) {
+        completeDatingState(ch)
+      }
+      break
+    }
+
+    case CharacterState.WALK_AWAY: {
+      // Like WALK but completes and fires callback when path is done
+      if (ch.frameTimer >= WALK_FRAME_DURATION_SEC) {
+        ch.frameTimer -= WALK_FRAME_DURATION_SEC
+        ch.frame = (ch.frame + 1) % 4
+      }
+
+      if (ch.path.length === 0) {
+        const center = tileCenter(ch.tileCol, ch.tileRow)
+        ch.x = center.x
+        ch.y = center.y
+        completeDatingState(ch)
+        break
+      }
+
+      const nextTile = ch.path[0]
+      ch.dir = directionBetween(ch.tileCol, ch.tileRow, nextTile.col, nextTile.row)
+      ch.moveProgress += (ch.approachSpeed / TILE_SIZE) * dt
+
+      const fromCenter = tileCenter(ch.tileCol, ch.tileRow)
+      const toCenter = tileCenter(nextTile.col, nextTile.row)
+      const t = Math.min(ch.moveProgress, 1)
+      ch.x = fromCenter.x + (toCenter.x - fromCenter.x) * t
+      ch.y = fromCenter.y + (toCenter.y - fromCenter.y) * t
+
+      if (ch.moveProgress >= 1) {
+        ch.tileCol = nextTile.col
+        ch.tileRow = nextTile.row
+        ch.x = toCenter.x
+        ch.y = toCenter.y
+        ch.path.shift()
+        ch.moveProgress = 0
+      }
+      break
+    }
   }
 }
 
@@ -377,16 +449,22 @@ export function getCharacterSprite(ch: Character, sprites: CharacterSprites): Sp
       return sprites.typing[ch.dir][ch.frame % 2]
     case CharacterState.WALK:
     case CharacterState.APPROACH:
+    case CharacterState.WALK_AWAY:
       return sprites.walk[ch.dir][ch.frame % 4]
     case CharacterState.DELIVER_LINE:
-    case CharacterState.REACT_EMOTION:
     case CharacterState.USE_PROP:
-      // Use typing frames as stand-in until custom dating sprites exist
-      return sprites.typing[ch.dir][ch.frame % 2]
+      return sprites.deliverLine[ch.frame % 2]
+    case CharacterState.REACT_EMOTION:
+    case CharacterState.BLUSH:
+      return sprites.blush[ch.frame % 2]
     case CharacterState.CELEBRATE:
-      return sprites.walk[ch.dir][ch.frame % 4]
+      return sprites.celebrate[ch.frame % 4]
     case CharacterState.DESPAIR:
-      return sprites.typing[ch.dir][ch.frame % 2]
+      return sprites.despair[ch.frame % 2]
+    case CharacterState.ANGRY_KICK:
+      return sprites.angryKick[ch.frame % 2]
+    case CharacterState.THINK:
+      return sprites.think[ch.frame % 2]
     case CharacterState.IDLE:
     default:
       return sprites.walk[ch.dir][1]
