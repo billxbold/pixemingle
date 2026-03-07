@@ -3,6 +3,7 @@ import type { AgentAppearance } from '@/types/database'
 export const PREMADE_COUNT = 20
 
 export function premadeUrl(index: number): string {
+  if (index < 1 || index > PREMADE_COUNT) throw new RangeError(`premadeUrl: index ${index} out of range 1-${PREMADE_COUNT}`)
   return `/sprites/characters/premade/Premade_Character_48x48_${String(index).padStart(2, '0')}.png`
 }
 
@@ -37,7 +38,6 @@ export const BODY_COUNT = 9
 export const EYES_COUNT = 7
 
 export const DEFAULT_APPEARANCE: AgentAppearance = {
-  premadeIndex: 1,
   body: 1,
   eyes: 1,
   outfit: 'Outfit_01_48x48_01',
