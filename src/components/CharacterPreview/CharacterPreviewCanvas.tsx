@@ -7,14 +7,17 @@ import type { CharacterAppearance } from '@/engine/types'
 
 interface Props {
   appearance: AgentAppearance
-  size?: number
+  width?: number
+  height?: number
 }
 
 const FRAME_SX = 0
 const FRAME_SY = 2 * 48
-const FRAME_SIZE = 48
+const FRAME_W = 48
+const CROP_Y = 20    // skip top empty space in the 96px two-row frame
+const CROP_H = 72    // capture 72px of character content
 
-export function CharacterPreviewCanvas({ appearance, size = 96 }: Props) {
+export function CharacterPreviewCanvas({ appearance, width = 80, height = 120 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -23,27 +26,27 @@ export function CharacterPreviewCanvas({ appearance, size = 96 }: Props) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    ctx.clearRect(0, 0, size, size)
+    ctx.clearRect(0, 0, width, height)
 
     // AgentAppearance (DB layer) and CharacterAppearance (engine layer) are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
-        ctx.clearRect(0, 0, size, size)
+        ctx.clearRect(0, 0, width, height)
         ctx.imageSmoothingEnabled = false
-        ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, size, size)
+        ctx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, width, height)
       })
       .catch(() => {
         ctx.fillStyle = '#ec4899'
-        ctx.fillRect(size * 0.2, size * 0.1, size * 0.6, size * 0.8)
+        ctx.fillRect(width * 0.2, height * 0.1, width * 0.6, height * 0.8)
       })
-  }, [appearance, size])
+  }, [appearance, width, height])
 
   return (
     <canvas
       ref={canvasRef}
-      width={size}
-      height={size}
-      style={{ imageRendering: 'pixelated', width: size, height: size }}
+      width={width}
+      height={height}
+      style={{ imageRendering: 'pixelated', width, height }}
     />
   )
 }

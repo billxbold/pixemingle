@@ -18,9 +18,14 @@ interface Props {
 
 const FRAME_SX = 0
 const FRAME_SY = 2 * 48
-const FRAME_SIZE = 48
-const PREVIEW_SIZE = 96
-const THUMB_SIZE = 48
+const FRAME_W = 48
+const FRAME_H = 96       // LimeZu chars span 2 rows (48×96 per frame)
+const CROP_Y = 20         // skip top 20px of empty space in the 96px frame
+const CROP_H = 72         // capture 72px of character content
+const PREVIEW_W = 80
+const PREVIEW_H = 120
+const THUMB_W = 40
+const THUMB_H = 60
 
 const SpriteThumb = memo(function SpriteThumb({ appearance, selected, onClick }: {
   appearance: AgentAppearance
@@ -35,19 +40,20 @@ const SpriteThumb = memo(function SpriteThumb({ appearance, selected, onClick }:
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
+    ctx.clearRect(0, 0, THUMB_W, THUMB_H)
     // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
         if (cancelled) return
-        ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
+        ctx.clearRect(0, 0, THUMB_W, THUMB_H)
         ctx.imageSmoothingEnabled = false
-        ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, THUMB_SIZE, THUMB_SIZE)
+        // Draw 2-row frame, cropped to character content
+        ctx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, THUMB_W, THUMB_H)
       })
       .catch(() => {
         if (cancelled) return
         ctx.fillStyle = '#ec4899'
-        ctx.fillRect(8, 4, 32, 40)
+        ctx.fillRect(4, 4, 32, 52)
       })
     return () => { cancelled = true }
   }, [appearance])
@@ -61,9 +67,9 @@ const SpriteThumb = memo(function SpriteThumb({ appearance, selected, onClick }:
     >
       <canvas
         ref={canvasRef}
-        width={THUMB_SIZE}
-        height={THUMB_SIZE}
-        style={{ imageRendering: 'pixelated', display: 'block', width: THUMB_SIZE, height: THUMB_SIZE }}
+        width={THUMB_W}
+        height={THUMB_H}
+        style={{ imageRendering: 'pixelated', display: 'block', width: THUMB_W, height: THUMB_H }}
       />
     </button>
   )
@@ -82,19 +88,20 @@ export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    ctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H)
     // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
     buildCharacterSheet(appearance as CharacterAppearance)
       .then(sheet => {
         if (cancelled) return
-        ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+        ctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H)
         ctx.imageSmoothingEnabled = false
-        ctx.drawImage(sheet, FRAME_SX, FRAME_SY, FRAME_SIZE, FRAME_SIZE, 0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+        // Draw 2-row frame, cropped to character content
+        ctx.drawImage(sheet, FRAME_SX, FRAME_SY + CROP_Y, FRAME_W, CROP_H, 0, 0, PREVIEW_W, PREVIEW_H)
       })
       .catch(() => {
         if (cancelled) return
         ctx.fillStyle = '#ec4899'
-        ctx.fillRect(PREVIEW_SIZE * 0.2, PREVIEW_SIZE * 0.1, PREVIEW_SIZE * 0.6, PREVIEW_SIZE * 0.8)
+        ctx.fillRect(PREVIEW_W * 0.2, PREVIEW_H * 0.1, PREVIEW_W * 0.6, PREVIEW_H * 0.8)
       })
     return () => { cancelled = true }
   }, [appearance])
@@ -121,9 +128,9 @@ export function CharacterStep({ data, onChange, onNext, onBack }: Props) {
         <div className="bg-gray-900 rounded-xl border border-gray-700 p-3">
           <canvas
             ref={bigCanvasRef}
-            width={PREVIEW_SIZE}
-            height={PREVIEW_SIZE}
-            style={{ imageRendering: 'pixelated', display: 'block', width: PREVIEW_SIZE, height: PREVIEW_SIZE }}
+            width={PREVIEW_W}
+            height={PREVIEW_H}
+            style={{ imageRendering: 'pixelated', display: 'block', width: PREVIEW_W, height: PREVIEW_H }}
           />
         </div>
       </div>
