@@ -4,20 +4,23 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { WorldState } from '@/engine/engine/officeState'
 import { SceneManager, SceneName } from '@/engine/sceneManager'
 import { createSceneLayouts } from '@/engine/scenes'
-import { loadSingleSprite } from '@/engine/assetLoader'
-import { VENUE_FURNITURE, getVenueFurnitureUrl } from '@/engine/scenes/venueAssets'
-import { buildDynamicCatalog } from '@/engine/layout/furnitureCatalog'
-import type { VenueName } from '@/types/database'
+import { loadVenueImages } from '@/engine/assetLoader'
+import type { VenueImages } from '@/engine/assetLoader'
+import type { CharacterAppearance } from '@/engine/types'
 
-export function usePixelWorld() {
+// Cache venue images across scene transitions
+const venueImageCache = new Map<SceneName, VenueImages>()
+
+export function usePixelWorld(userAppearance?: import('@/types/database').AgentAppearance) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const worldStateRef = useRef<WorldState | null>(null)
   const sceneManagerRef = useRef<SceneManager | null>(null)
   const panRef = useRef({ x: 0, y: 0 })
+  const venueImagesRef = useRef<VenueImages | null>(null)
   const [currentScene, setCurrentScene] = useState<SceneName>('lounge')
   const [zoom, setZoom] = useState(() => {
     if (typeof window === 'undefined') return 2
-    return window.innerWidth < 768 ? 1 : 3
+    return window.innerWidth < 768 ? 1 : 2
   })
 
   useEffect(() => {
@@ -28,64 +31,57 @@ export function usePixelWorld() {
     worldStateRef.current = worldState
     sceneManagerRef.current = sceneManager
 
-    // Add a demo agent
+    // Add a demo agent with a LimeZu premade character
     worldState.addAgent(1, 0, 0, undefined, true)
+    const ch = worldState.characters.get(1)
+    if (ch) {
+      const defaultAppearance: import('@/engine/types').CharacterAppearance = {
+        body: 1, eyes: 1, outfit: 'Outfit_01_48x48_01', hairstyle: 'Hairstyle_01_48x48_01', premadeIndex: 1
+      }
+      // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
+      ch.appearance = userAppearance
+        ? (userAppearance as import('@/engine/types').CharacterAppearance)
+        : defaultAppearance
+    }
+    worldState.cameraFollowId = 1
 
-    // Load venue furniture sprites asynchronously
-    loadVenueSprites()
+    // Load initial venue images
+    loadVenueForScene('lounge')
 
     return () => {
       worldStateRef.current = null
       sceneManagerRef.current = null
     }
-  }, [])
+  }, [userAppearance])
 
-  // Load all venue Singles PNGs and register as dynamic catalog entries
-  async function loadVenueSprites() {
-    const venues: VenueName[] = ['lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum']
-    const catalog: Array<{
-      id: string; label: string; category: string
-      width: number; height: number; footprintW: number; footprintH: number; isDesk: boolean
-    }> = []
-    const sprites: Record<string, string[][]> = {}
-
-    await Promise.all(
-      venues.flatMap((venue) =>
-        VENUE_FURNITURE[venue].map(async (entry) => {
-          const url = getVenueFurnitureUrl(venue, entry.number)
-          try {
-            const sprite = await loadSingleSprite(url)
-            const id = `venue_${venue}_${entry.number}`
-            sprites[id] = sprite
-            catalog.push({
-              id,
-              label: entry.label,
-              category: 'dating',
-              width: sprite[0]?.length ?? 16,
-              height: sprite.length,
-              footprintW: Math.max(1, Math.ceil((sprite[0]?.length ?? 16) / 16)),
-              footprintH: Math.max(1, Math.ceil(sprite.length / 16)),
-              isDesk: false,
-            })
-          } catch {
-            // Silently skip missing assets
-          }
-        })
-      )
-    )
-
-    if (catalog.length > 0) {
-      buildDynamicCatalog({ catalog, sprites })
+  async function loadVenueForScene(scene: SceneName) {
+    if (venueImageCache.has(scene)) {
+      venueImagesRef.current = venueImageCache.get(scene)!
+      return
+    }
+    try {
+      const images = await loadVenueImages(scene)
+      venueImageCache.set(scene, images)
+      venueImagesRef.current = images
+    } catch {
+      venueImagesRef.current = null
     }
   }
 
   const transitionTo = useCallback((scene: SceneName) => {
     sceneManagerRef.current?.transitionTo(scene)
     setCurrentScene(scene)
+    loadVenueForScene(scene)
   }, [])
 
-  const addAgent = useCallback((id: number, palette?: number) => {
-    worldStateRef.current?.addAgent(id, palette)
+  const addAgent = useCallback((id: number, palette?: number, appearance?: CharacterAppearance) => {
+    const ws = worldStateRef.current
+    if (!ws) return
+    ws.addAgent(id, palette)
+    if (appearance) {
+      const ch = ws.characters.get(id)
+      if (ch) ch.appearance = appearance
+    }
   }, [])
 
   return {
@@ -93,6 +89,7 @@ export function usePixelWorld() {
     worldStateRef,
     sceneManagerRef,
     panRef,
+    venueImagesRef,
     currentScene,
     zoom,
     setZoom,

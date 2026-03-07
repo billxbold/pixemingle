@@ -20,18 +20,20 @@ interface PixelWorldProps {
   matchId?: string | null
   role?: 'chaser' | 'gatekeeper'
   chaserName?: string
+  userAppearance?: import('@/types/database').AgentAppearance | null
 }
 
-export function PixelWorld({ matchId = null, role = 'chaser', chaserName = 'Agent' }: PixelWorldProps) {
+export function PixelWorld({ matchId = null, role = 'chaser', chaserName = 'Agent', userAppearance = null }: PixelWorldProps) {
   const {
     worldStateRef,
     sceneManagerRef,
     panRef,
+    venueImagesRef,
     currentScene,
     zoom,
     setZoom,
     transitionTo,
-  } = usePixelWorld()
+  } = usePixelWorld(userAppearance ?? undefined)
 
   const { proposeDate, respondVenue } = useMatching()
   const {
@@ -47,6 +49,7 @@ export function PixelWorld({ matchId = null, role = 'chaser', chaserName = 'Agen
         worldStateRef={worldStateRef}
         sceneManagerRef={sceneManagerRef}
         panRef={panRef}
+        venueImagesRef={venueImagesRef}
         zoom={zoom}
         onZoomChange={setZoom}
       />
