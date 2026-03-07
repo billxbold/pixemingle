@@ -318,6 +318,51 @@ export const BUBBLE_WAITING_SPRITE: SpriteData = (() => {
   ]
 })()
 
+/** Wardrobe prop for venue counter sequence: 16x32 */
+export const WARDROBE_SPRITE: SpriteData = (() => {
+  const W = '#5B3A1A' // dark wood
+  const L = '#8B6914' // lighter wood
+  const D = '#3D2510' // dark edge
+  const H = '#C4A43E' // handle/gold
+  const S = '#6B4E0A' // shadow
+  const rows: string[][] = []
+  // Top cap (rows 0-1)
+  rows.push([_, _, D, D, D, D, D, D, D, D, D, D, D, D, _, _])
+  rows.push([_, D, W, W, W, W, W, W, W, W, W, W, W, W, D, _])
+  // Upper body (rows 2-12)
+  for (let r = 0; r < 11; r++) {
+    const row = [D, W, L, L, L, L, L, L, L, L, L, L, L, L, W, D]
+    if (r === 5) { row[7] = H; row[8] = H }
+    rows.push(row)
+  }
+  // Center divider
+  rows.push([D, W, W, W, W, W, W, W, W, W, W, W, W, W, W, D])
+  // Lower body (rows 14-26)
+  for (let r = 0; r < 13; r++) {
+    const row = [D, W, L, L, L, L, L, L, L, L, L, L, L, L, W, D]
+    if (r === 6) { row[7] = H; row[8] = H }
+    rows.push(row)
+  }
+  // Base (rows 27-28)
+  rows.push([D, D, W, W, W, W, W, W, W, W, W, W, W, W, D, D])
+  rows.push([_, _, D, D, _, _, _, _, _, _, _, _, _, D, D, _])
+  // Feet (rows 29-31)
+  rows.push([_, _, S, S, _, _, _, _, _, _, _, _, _, S, S, _])
+  rows.push([_, _, S, S, _, _, _, _, _, _, _, _, _, S, S, _])
+  rows.push(new Array(16).fill(_))
+  return rows
+})()
+
+/** Kicked can: 6x6 pixels */
+export const CAN_SPRITE: SpriteData = [
+  ['', '#888', '#888', '#888', '#888', ''],
+  ['#888', '#AAA', '#CCC', '#CCC', '#AAA', '#888'],
+  ['#888', '#CCC', '#E44', '#E44', '#CCC', '#888'],
+  ['#888', '#CCC', '#E44', '#E44', '#CCC', '#888'],
+  ['#888', '#AAA', '#CCC', '#CCC', '#AAA', '#888'],
+  ['', '#888', '#888', '#888', '#888', ''],
+]
+
 // ── Character Sprites ───────────────────────────────────────────
 // 16x24 characters with palette substitution
 

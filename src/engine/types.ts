@@ -92,6 +92,7 @@ export const FurnitureType = {
   FLOWERS: 'flowers',
   GUITAR: 'guitar',
   DO_NOT_DISTURB: 'do_not_disturb',
+  CAN: 'can',
 } as const
 export type FurnitureType = (typeof FurnitureType)[keyof typeof FurnitureType]
 

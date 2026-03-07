@@ -9,6 +9,8 @@ import {
   CHAIR_SPRITE,
   PC_SPRITE,
   LAMP_SPRITE,
+  WARDROBE_SPRITE,
+  CAN_SPRITE,
 } from '../sprites/spriteData'
 
 // Placeholder sprite for dating furniture (will be replaced with LimeZu tileset sprites)
@@ -67,7 +69,7 @@ export const FURNITURE_CATALOG: CatalogEntryWithCategory[] = [
   { type: FurnitureType.CAFE_CHAIR,   label: 'Cafe Chair',   footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#A0522D'), isDesk: false, category: 'chairs' },
   { type: FurnitureType.COFFEE_CUP,   label: 'Coffee Cup',   footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#D2691E'), isDesk: false, category: 'misc' },
   { type: FurnitureType.BED,          label: 'Bed',          footprintW: 2, footprintH: 3, sprite: placeholderSprite(2, 3, '#4169E1'), isDesk: false, category: 'misc' },
-  { type: FurnitureType.WARDROBE,     label: 'Wardrobe',     footprintW: 2, footprintH: 1, sprite: placeholderSprite(2, 1, '#654321'), isDesk: false, category: 'storage' },
+  { type: FurnitureType.WARDROBE,     label: 'Wardrobe',     footprintW: 1, footprintH: 2, sprite: WARDROBE_SPRITE, isDesk: false, category: 'storage' },
   { type: FurnitureType.MIRROR,       label: 'Mirror',       footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#87CEEB'), isDesk: false, category: 'decor', canPlaceOnWalls: true },
   { type: FurnitureType.PARK_BENCH,   label: 'Park Bench',   footprintW: 2, footprintH: 1, sprite: placeholderSprite(2, 1, '#228B22'), isDesk: false, category: 'misc' },
   { type: FurnitureType.TREE,         label: 'Tree',         footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#006400'), isDesk: false, category: 'decor' },
@@ -77,6 +79,7 @@ export const FURNITURE_CATALOG: CatalogEntryWithCategory[] = [
   { type: FurnitureType.FLOWERS,      label: 'Flowers',      footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#FF1493'), isDesk: false, category: 'decor' },
   { type: FurnitureType.GUITAR,       label: 'Guitar',       footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#B8860B'), isDesk: false, category: 'misc' },
   { type: FurnitureType.DO_NOT_DISTURB, label: 'Do Not Disturb', footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#DC143C'), isDesk: false, category: 'misc' },
+  { type: FurnitureType.CAN,            label: 'Can',            footprintW: 1, footprintH: 1, sprite: CAN_SPRITE, isDesk: false, category: 'misc' },
 ]
 
 // ── Rotation groups ──────────────────────────────────────────────
