@@ -40,3 +40,12 @@ next-env.d.ts
 
 # git worktrees
 .worktrees/
+
+# LimeZu licensed tilesets (not committed)
+public/sprites/tilesets/floors/
+public/sprites/tilesets/lounge/
+public/sprites/tilesets/gallery/
+public/sprites/tilesets/japanese/
+public/sprites/tilesets/icecream/
+public/sprites/tilesets/studio/
+public/sprites/tilesets/museum/
