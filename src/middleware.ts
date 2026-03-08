@@ -13,6 +13,11 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Dev mode: allow /world access without auth for testing
+  if (process.env.NODE_ENV === 'development' && request.nextUrl.pathname.startsWith('/world')) {
+    return response
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

@@ -50,6 +50,8 @@ export function Canvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const offsetRef = useRef({ x: 0, y: 0 })
+  const onFrameUpdateRef = useRef(onFrameUpdate)
+  onFrameUpdateRef.current = onFrameUpdate
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 })
   const leftPanStartRef = useRef<{ mouseX: number; mouseY: number; panX: number; panY: number } | null>(null)
@@ -108,7 +110,7 @@ export function Canvas({
         if (!worldState) return
         worldState.update(dt)
         sceneManager?.update(dt)
-        onFrameUpdate?.(dt)
+        onFrameUpdateRef.current?.(dt)
       },
       render: (ctx) => {
         const worldState = worldStateRef.current

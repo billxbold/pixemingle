@@ -1,69 +1,60 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@/lib/supabase';
 import type { ChatMessage } from '@/types/database';
 
 export function useChat(matchId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClient();
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load history + subscribe to new messages
+  // Load messages via API + poll for new ones
   useEffect(() => {
     if (!matchId) return;
 
     setIsLoading(true);
 
-    // Load history
-    supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('match_id', matchId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) setMessages(data as ChatMessage[]);
-        setIsLoading(false);
-      });
-
-    // Subscribe to new messages (deduplicate by id)
-    const channel = supabase
-      .channel(`chat:${matchId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `match_id=eq.${matchId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as ChatMessage;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
+    const loadMessages = async () => {
+      try {
+        const res = await fetch(`/api/chat/${matchId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages) setMessages(data.messages as ChatMessage[]);
         }
-      )
-      .subscribe();
+      } catch { /* network error */ }
+      setIsLoading(false);
+    };
+
+    loadMessages();
+
+    // Poll every 3s for new messages
+    pollRef.current = setInterval(loadMessages, 3000);
 
     return () => {
-      channel.unsubscribe();
+      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [matchId, supabase]);
+  }, [matchId]);
 
   const sendMessage = useCallback(
     async (content: string) => {
       if (!matchId || !content.trim()) return;
-      await fetch(`/api/chat/${matchId}`, {
+      const res = await fetch(`/api/chat/${matchId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: content.trim() }),
       });
+      if (res.ok) {
+        const { message } = await res.json();
+        if (message) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === message.id)) return prev;
+            return [...prev, message as ChatMessage];
+          });
+        }
+      }
     },
     [matchId]
   );
 
-  return { messages, sendMessage, isLoading, messagesEndRef };
+  return { messages, sendMessage, isLoading };
 }

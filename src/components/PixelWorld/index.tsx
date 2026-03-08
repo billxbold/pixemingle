@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { usePixelWorld } from '@/hooks/usePixelWorld'
 import { useMatching } from '@/hooks/useMatching'
 import { useScenario } from '@/hooks/useScenario'
@@ -10,8 +10,10 @@ import { DateProposalOverlay } from './DateProposalOverlay'
 import { AgentChatBar } from './AgentChatBar'
 import { CandidateSlider } from './CandidateSlider'
 import { InvitationNotification } from './InvitationNotification'
+import { ChatPanel } from './ChatPanel'
+import { useChat } from '@/hooks/useChat'
 import type { SceneName } from '@/engine/sceneManager'
-import type { AgentAppearance } from '@/types/database'
+import type { AgentAppearance, FlirtScenario } from '@/types/database'
 
 const SCENE_LABELS: Record<SceneName, string> = {
   home: 'Home',
@@ -28,9 +30,10 @@ interface PixelWorldProps {
   role?: 'chaser' | 'gatekeeper'
   chaserName?: string
   userAppearance?: AgentAppearance | null
+  userId?: string
 }
 
-export function PixelWorld({ matchId: initialMatchId = null, role: initialRole = 'chaser', chaserName = 'Agent', userAppearance = null }: PixelWorldProps) {
+export function PixelWorld({ matchId: initialMatchId = null, role: initialRole = 'chaser', chaserName = 'Agent', userAppearance = null, userId = '' }: PixelWorldProps) {
   const {
     worldStateRef,
     sceneManagerRef,
@@ -43,17 +46,24 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     setZoom,
     transitionTo,
     playMontage,
+    startTheater,
     onFrameUpdate,
   } = usePixelWorld(userAppearance ?? undefined)
 
   const journey = useJourneyState()
+  const theaterStartedRef = useRef(false)
   const { candidates, selectedCandidate, setSelectedCandidate, search, pass, proposeDate, respondVenue } = useMatching()
   const {
     dateStatus,
     venueProposal,
+    reactionData,
     broadcastDateProposal,
     broadcastVenueResponse,
-  } = useScenario(journey.matchId ?? initialMatchId, journey.role ?? initialRole)
+  } = useScenario(journey.matchId ?? initialMatchId, journey.role ?? initialRole, journey.recoveredProposal)
+
+  // Post-match human chat
+  const chatMatchId = journey.state === 'POST_MATCH' ? (journey.matchId ?? initialMatchId) : null
+  const { messages, sendMessage, isLoading: chatLoading } = useChat(chatMatchId)
 
   // Wire agent chat actions to journey transitions
   const handleAgentResponse = useCallback((text: string, action: string | null) => {
@@ -78,6 +88,13 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     }
   }, [worldStateRef, playMontage, journey, search, selectedCandidate])
 
+  // Chaser transitions to WAITING after proposing
+  useEffect(() => {
+    if (dateStatus === 'proposed' && (journey.role || initialRole) === 'chaser' && journey.state !== 'WAITING') {
+      journey.transition('WAITING')
+    }
+  }, [dateStatus, journey, initialRole])
+
   // Gatekeeper receives date proposal notification
   useEffect(() => {
     if (dateStatus === 'proposed' && journey.state === 'HOME_IDLE' && (journey.role || initialRole) === 'gatekeeper') {
@@ -90,24 +107,97 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     }
   }, [dateStatus, journey.state, journey.role, initialRole, worldStateRef])
 
-  // Wire realtime events to journey transitions
+  // Wire realtime events to journey transitions + theater start
   useEffect(() => {
-    if (dateStatus === 'accepted' && journey.state === 'WAITING') {
-      const venue = venueProposal?.venue as SceneName
-      if (venue) transitionTo(venue)
+    const enterTheater = async (venue: SceneName, matchIdOverride?: string) => {
+      theaterStartedRef.current = true
+      transitionTo(venue)
       journey.transition('THEATER')
+
+      // Generate or fetch scenario, then start in-canvas theater
+      const matchId = matchIdOverride ?? journey.matchId ?? initialMatchId
+      if (!matchId) return
+
+      const onTheaterComplete = (result: string) => {
+        if (result === 'rejected') {
+          transitionTo('home')
+          journey.transition('HOME_IDLE')
+        } else {
+          // 'accepted' or 'pending' (LLM didn't specify) — treat as success
+          journey.transition('POST_MATCH')
+        }
+      }
+
+      let scenario: FlirtScenario | null = null
+      let matchAppearance: AgentAppearance | null = null
+
+      try {
+        const res = await fetch(`/api/scenarios/${matchId}/generate`, { method: 'POST' })
+        if (res.ok) {
+          const data = await res.json()
+          scenario = data.scenario ?? null
+        }
+        if (scenario) {
+          try {
+            const mRes = await fetch(`/api/matches/${matchId}`)
+            if (mRes.ok) {
+              const mData = await mRes.json()
+              matchAppearance = mData?.match_user?.appearance ?? null
+            }
+          } catch { /* use default */ }
+        }
+      } catch { /* network error */ }
+
+      if (!scenario) {
+        // Use fallback mini-scenario when API unavailable
+        scenario = {
+          match_id: matchId,
+          attempt_number: 1,
+          soul_type_a: 'funny',
+          soul_type_b: 'romantic',
+          steps: [
+            { agent: 'chaser', action: 'confident_walk', text: "Hey there! You look amazing.", duration_ms: 2500, emotion: 'excited' },
+            { agent: 'gatekeeper', action: 'eye_roll', text: "Oh? Tell me more...", duration_ms: 2500 },
+            { agent: 'chaser', action: 'flower_offer', text: "I brought you these!", duration_ms: 2000, emotion: 'happy', props: ['flower'] },
+            { agent: 'gatekeeper', action: 'blush', text: "That's actually sweet.", duration_ms: 2000, emotion: 'happy' },
+            { agent: 'chaser', action: 'pickup_line', text: "So... want to get out of here?", duration_ms: 2500 },
+            { agent: 'gatekeeper', action: 'thinking', text: "Hmm, let me think...", duration_ms: 2000 },
+            { agent: 'gatekeeper', action: 'flower_accept', text: "Why not! Let's go!", duration_ms: 2000, emotion: 'excited' },
+            { agent: 'both', action: 'victory_dance', text: "It's a match!", duration_ms: 3000, emotion: 'excited' },
+          ],
+          result: 'accepted',
+        }
+      }
+
+      startTheater(scenario, matchAppearance, onTheaterComplete)
     }
-    if (dateStatus === 'countered' && journey.state === 'WAITING') {
-      // Play countered reaction, then transition to new venue
+
+    // Dev shortcut: expose enterTheater on window for testing
+    if (process.env.NODE_ENV === 'development') {
+      (window as unknown as Record<string, unknown>).__enterTheater = enterTheater
+    }
+
+    // Enter theater when venue accepted/countered (don't require WAITING — state may be HOME_IDLE or PROPOSING)
+    if (dateStatus === 'accepted' && journey.state !== 'THEATER' && journey.state !== 'POST_MATCH') {
       const venue = venueProposal?.venue as SceneName
-      if (venue) transitionTo(venue)
-      journey.transition('THEATER')
+      if (venue) enterTheater(venue)
     }
-    if (dateStatus === 'declined') {
+    if (dateStatus === 'countered' && journey.state !== 'THEATER' && journey.state !== 'POST_MATCH') {
+      const venue = (reactionData?.chosen ?? venueProposal?.venue) as SceneName
+      if (venue) enterTheater(venue)
+    }
+    if (dateStatus === 'declined' && journey.state !== 'HOME_IDLE') {
       journey.transition('HOME_IDLE')
       transitionTo('home')
     }
-  }, [dateStatus, journey, venueProposal, transitionTo])
+
+    // Recovery: page reloaded during theater — re-enter theater with recovered venue
+    if (journey.state === 'THEATER' && dateStatus === 'pending' && !theaterStartedRef.current) {
+      theaterStartedRef.current = true
+      const venue = (journey.recoveredVenue ?? 'lounge') as SceneName
+      enterTheater(venue)
+    }
+  }, [dateStatus, journey, venueProposal, reactionData, transitionTo, startTheater, initialMatchId])
 
   const journeyContext = (() => {
     switch (journey.state) {
@@ -122,64 +212,85 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     }
   })()
 
+  const showChat = journey.state === 'POST_MATCH' && chatMatchId
+
   return (
     <div className="flex flex-col w-full h-dvh bg-black overflow-hidden">
-      {/* Canvas area — grows to fill all space above the chat bar */}
-      <div className="flex-1 relative overflow-hidden min-h-0">
-        <Canvas
-          worldStateRef={worldStateRef}
-          sceneManagerRef={sceneManagerRef}
-          panRef={panRef}
-          venueImagesRef={venueImagesRef}
-          particlesRef={particlesRef}
-          propsRef={propsRef}
-          onFrameUpdate={onFrameUpdate}
-          zoom={zoom}
-          onZoomChange={setZoom}
-        />
-
-        {/* Candidate slider */}
-        {journey.state === 'BROWSING' && candidates && candidates.length > 0 && (
-          <CandidateSlider
-            candidates={candidates}
-            onSelect={(c) => setSelectedCandidate(c)}
-            onPass={() => pass()}
-            onAgentComment={(text) => {
-              const ch = worldStateRef.current?.characters.get(1)
-              if (ch) { ch.speechText = text; ch.speechTimer = 4 }
-            }}
+      {/* Main content row: canvas + optional right-side chat */}
+      <div className="flex-1 flex min-h-0">
+        {/* Canvas area */}
+        <div className="flex-1 relative overflow-hidden min-h-0">
+          <Canvas
+            worldStateRef={worldStateRef}
+            sceneManagerRef={sceneManagerRef}
+            panRef={panRef}
+            venueImagesRef={venueImagesRef}
+            particlesRef={particlesRef}
+            propsRef={propsRef}
+            onFrameUpdate={onFrameUpdate}
+            zoom={zoom}
+            onZoomChange={setZoom}
           />
-        )}
 
-        {/* Gatekeeper invitation notification */}
-        {dateStatus === 'proposed' && journey.state === 'HOME_IDLE' && (journey.role || initialRole) === 'gatekeeper' && venueProposal && (
-          <InvitationNotification
-            chaserName={chaserName}
-            venue={venueProposal.venue}
-            inviteText={venueProposal.text}
-            onOpen={() => {
-              // DateProposalOverlay handles the invitation card display
-            }}
-          />
-        )}
+          {/* Candidate slider */}
+          {journey.state === 'BROWSING' && candidates && candidates.length > 0 && (
+            <CandidateSlider
+              candidates={candidates}
+              onSelect={(c) => setSelectedCandidate(c)}
+              onPass={() => pass()}
+              onAgentComment={(text) => {
+                const ch = worldStateRef.current?.characters.get(1)
+                if (ch) { ch.speechText = text; ch.speechTimer = 4 }
+              }}
+            />
+          )}
 
-        {/* Date proposal overlay */}
-        {(journey.matchId || initialMatchId) && (
-          <DateProposalOverlay
-            matchId={(journey.matchId || initialMatchId)!}
-            role={journey.role || initialRole}
-            dateStatus={dateStatus}
-            venueProposal={venueProposal}
-            chaserName={chaserName}
-            onPropose={proposeDate}
-            onRespond={respondVenue}
-            onBroadcastProposal={broadcastDateProposal}
-            onBroadcastResponse={broadcastVenueResponse}
-          />
+          {/* Gatekeeper invitation notification */}
+          {dateStatus === 'proposed' && journey.state === 'HOME_IDLE' && (journey.role || initialRole) === 'gatekeeper' && venueProposal && (
+            <InvitationNotification
+              chaserName={chaserName}
+              venue={venueProposal.venue}
+              inviteText={venueProposal.text}
+              onOpen={() => {}}
+            />
+          )}
+
+          {/* Date proposal overlay — hide during theater and post-match */}
+          {(journey.matchId || initialMatchId) && journey.state !== 'THEATER' && journey.state !== 'POST_MATCH' && (
+            <DateProposalOverlay
+              matchId={(journey.matchId || initialMatchId)!}
+              role={journey.role || initialRole}
+              dateStatus={dateStatus}
+              venueProposal={venueProposal}
+              chaserName={chaserName}
+              onPropose={proposeDate}
+              onRespond={respondVenue}
+              onBroadcastProposal={broadcastDateProposal}
+              onBroadcastResponse={broadcastVenueResponse}
+            />
+          )}
+        </div>
+
+        {/* Right-side user-to-user chat panel (POST_MATCH only) */}
+        {showChat && (
+          <div className="w-72 md:w-80 shrink-0">
+            <ChatPanel
+              messages={messages}
+              currentUserId={userId}
+              partnerId="match"
+              partnerName={chaserName}
+              isLoading={chatLoading}
+              onSendMessage={sendMessage}
+              onSpeechBubble={(text) => {
+                const ch = worldStateRef.current?.characters.get(2)
+                if (ch) { ch.speechText = text; ch.speechTimer = Math.max(2, text.length * 0.06) }
+              }}
+            />
+          </div>
         )}
       </div>
 
-      {/* Agent chat bar — sits below the canvas, never overlaps */}
+      {/* Agent chat bar — always at bottom */}
       <AgentChatBar onAgentResponse={handleAgentResponse} context={journeyContext} />
     </div>
   )

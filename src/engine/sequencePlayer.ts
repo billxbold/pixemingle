@@ -1,7 +1,33 @@
-import type { FlirtScenario, FlirtStep } from '@/types/database';
+import type { FlirtScenario, FlirtStep, AnimationAction } from '@/types/database';
 import type { WorldState } from './engine/officeState';
 import type { ParticleSystem } from './particles';
+import { CharacterState, Direction } from './types';
 import { getAnimationSet, type Gender } from './genderAnimations';
+
+/** Map scenario AnimationAction → engine CharacterState for sprite rendering */
+const ACTION_TO_STATE: Record<string, CharacterState> = {
+  idle: CharacterState.IDLE,
+  nervous_walk: CharacterState.WALK,
+  confident_walk: CharacterState.WALK,
+  walk_away: CharacterState.WALK_AWAY,
+  dramatic_entrance: CharacterState.APPROACH,
+  pickup_line: CharacterState.DELIVER_LINE,
+  flower_offer: CharacterState.DELIVER_LINE,
+  flower_accept: CharacterState.DELIVER_LINE,
+  flower_throw: CharacterState.ANGRY_KICK,
+  victory_dance: CharacterState.CELEBRATE,
+  walk_together: CharacterState.WALK,
+  eye_roll: CharacterState.IDLE,
+  phone_check: CharacterState.THINK,
+  blush: CharacterState.BLUSH,
+  sad_slump: CharacterState.DESPAIR,
+  angry_kick: CharacterState.ANGRY_KICK,
+  rejected_shock: CharacterState.DESPAIR,
+  thinking: CharacterState.THINK,
+  determined_face: CharacterState.IDLE,
+  irritated_foot_tap: CharacterState.IDLE,
+  wardrobe_change: CharacterState.USE_PROP,
+};
 
 export type SequencePlayerCallback = {
   onStepStart: (stepIndex: number, step: FlirtStep) => void;
@@ -121,6 +147,40 @@ export class SequencePlayer {
         : step.agent === 'gatekeeper'
           ? this.gatekeeperId
           : null;
+
+    // Set character animation state based on action
+    const applyState = (id: number, action: AnimationAction) => {
+      const ch = this.worldState.characters.get(id);
+      if (!ch) return;
+      ch.state = ACTION_TO_STATE[action] ?? CharacterState.IDLE;
+      ch.frame = 0;
+    };
+
+    if (agentId) {
+      applyState(agentId, step.action);
+    } else {
+      // 'both' — apply to both characters
+      applyState(this.chaserId, step.action);
+      applyState(this.gatekeeperId, step.action);
+    }
+
+    // Ensure characters face each other
+    const chaser = this.worldState.characters.get(this.chaserId);
+    const gk = this.worldState.characters.get(this.gatekeeperId);
+    if (chaser && gk) {
+      chaser.dir = chaser.x < gk.x ? Direction.RIGHT : Direction.LEFT;
+      gk.dir = gk.x < chaser.x ? Direction.RIGHT : Direction.LEFT;
+    }
+
+    // Walk-away: face away and start moving via x offset each frame
+    if (step.action === 'walk_away' || step.action === 'sad_walkoff') {
+      const ch = agentId ? this.worldState.characters.get(agentId) : null;
+      if (ch) {
+        ch.dir = Direction.LEFT;
+        // Mark as walking; the engine update loop will animate movement
+        ch.state = CharacterState.WALK_AWAY;
+      }
+    }
 
     // Show speech bubble
     if (step.text) {

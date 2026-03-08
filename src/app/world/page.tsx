@@ -18,5 +18,5 @@ export default async function WorldPage() {
     appearance = (data?.agent_appearance as AgentAppearance) ?? null
   }
 
-  return <PixelWorld userAppearance={appearance} />
+  return <PixelWorld userAppearance={appearance} userId={userId ?? undefined} />
 }

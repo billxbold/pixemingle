@@ -6,19 +6,32 @@ import type { FlirtScenario } from '@/types/database';
 
 export function useScenario(
   matchId: string | null,
-  role: 'chaser' | 'gatekeeper'
+  role: 'chaser' | 'gatekeeper',
+  initialProposal?: { dateStatus: 'proposed'; venue: string; inviteText: string } | null,
 ) {
   const [scenario, setScenario] = useState<FlirtScenario | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [venueProposal, setVenueProposal] = useState<{ venue: string; text: string } | null>(null);
-  const [dateStatus, setDateStatus] = useState<'pending' | 'proposed' | 'accepted' | 'countered' | 'declined'>('pending');
+  const [venueProposal, setVenueProposal] = useState<{ venue: string; text: string } | null>(
+    initialProposal ? { venue: initialProposal.venue, text: initialProposal.inviteText } : null,
+  );
+  const [dateStatus, setDateStatus] = useState<'pending' | 'proposed' | 'accepted' | 'countered' | 'declined'>(
+    initialProposal ? 'proposed' : 'pending',
+  );
   const [reactionData, setReactionData] = useState<Record<string, string> | null>(null);
   const [nudgeShown, setNudgeShown] = useState(false);
   const [rolesFlipped, setRolesFlipped] = useState(false);
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supabase = createClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Hydrate from recovered proposal (arrives async after page load)
+  useEffect(() => {
+    if (initialProposal && dateStatus === 'pending') {
+      setVenueProposal({ venue: initialProposal.venue, text: initialProposal.inviteText });
+      setDateStatus('proposed');
+    }
+  }, [initialProposal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Subscribe to match channel for real-time sync
   useEffect(() => {
@@ -164,12 +177,26 @@ export function useScenario(
   }, []);
 
   const broadcastDateProposal = useCallback((venue: string, text: string) => {
+    // Set local state immediately (broadcast doesn't deliver to sender)
+    setVenueProposal({ venue, text });
+    setDateStatus('proposed');
     channelRef.current?.send({
       type: 'broadcast', event: 'date_proposed', payload: { venue, text },
     });
   }, []);
 
   const broadcastVenueResponse = useCallback((event: string, payload: Record<string, unknown>) => {
+    // Set local state immediately (broadcast doesn't deliver to sender)
+    if (event === 'venue_accepted') {
+      setDateStatus('accepted');
+      setReactionData(payload as Record<string, string>);
+    } else if (event === 'venue_countered') {
+      setDateStatus('countered');
+      setReactionData(payload as Record<string, string>);
+    } else if (event === 'date_declined') {
+      setDateStatus('declined');
+      setReactionData(payload as Record<string, string>);
+    }
     channelRef.current?.send({ type: 'broadcast', event, payload });
   }, []);
 

@@ -25,7 +25,7 @@ export async function POST(
     .from('matches')
     .select('*')
     .eq('id', matchId)
-    .eq('status', 'active')
+    .in('status', ['active', 'pending_b'])
     .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
     .single()
 
@@ -36,18 +36,15 @@ export async function POST(
 
   const inviteText = await generateInviteText(chaserProfile, venue as VenueName)
 
-  await db.from('matches').update({
-    proposed_venue: venue,
-    venue_proposal_text: inviteText,
+  // Store venue proposal in scenario_cache JSONB (always available, no migration needed)
+  const { error: updateErr } = await db.from('matches').update({
+    scenario_cache: { proposal: { venue, text: inviteText, from_user_id: userId, proposed_at: new Date().toISOString() } },
     updated_at: new Date().toISOString(),
   }).eq('id', matchId)
 
-  const otherUserId = match.user_a_id === userId ? match.user_b_id : match.user_a_id
-  await db.from('notifications').insert({
-    user_id: otherUserId,
-    type: 'date_proposal',
-    data: { match_id: matchId, venue, text: inviteText, from_user_id: userId },
-  })
+  if (updateErr) {
+    console.error('Failed to store proposal in scenario_cache:', updateErr)
+  }
 
   return NextResponse.json({ text: inviteText, venue })
 }

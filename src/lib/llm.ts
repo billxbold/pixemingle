@@ -5,6 +5,19 @@ import { SOUL_CONFIGS } from './constants';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+/** Strip markdown code fences (```json ... ```) from LLM responses */
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('```')) {
+    const firstNewline = trimmed.indexOf('\n')
+    const lastFence = trimmed.lastIndexOf('```')
+    if (lastFence > firstNewline) {
+      return trimmed.slice(firstNewline + 1, lastFence).trim()
+    }
+  }
+  return trimmed
+}
+
 // Use Haiku for dev/testing, swap to Sonnet for production
 const LLM_MODEL = process.env.LLM_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -60,7 +73,7 @@ Output ONLY this JSON:
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
   try {
-    return JSON.parse(text);
+    return JSON.parse(stripCodeFences(text));
   } catch {
     return {
       rejection_text: "I'd rather reorganize my bookshelf.",
@@ -134,8 +147,10 @@ Output ONLY this JSON structure:
       "emotion": "nervous"
     }
   ],
-  "result": "pending"
-}`;
+  "result": "accepted" or "rejected"
+}
+
+IMPORTANT: The "result" field MUST be either "accepted" (the gatekeeper likes the chaser) or "rejected" (the gatekeeper is not interested). For attempt 1, lean toward "accepted" unless the soul types are truly incompatible.`;
 
   const response = await anthropic.messages.create({
     model: LLM_MODEL,
@@ -143,7 +158,8 @@ Output ONLY this JSON structure:
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  const rawText = response.content[0].type === 'text' ? response.content[0].text : '';
+  const text = stripCodeFences(rawText);
 
   try {
     const scenario = JSON.parse(text) as FlirtScenario;
@@ -156,12 +172,12 @@ Output ONLY this JSON structure:
       max_tokens: 2000,
       messages: [
         { role: 'user', content: prompt },
-        { role: 'assistant', content: text },
+        { role: 'assistant', content: rawText },
         { role: 'user', content: 'That was not valid JSON. Please output ONLY the valid JSON object, nothing else.' },
       ],
     });
-    const retryText = retryResponse.content[0].type === 'text' ? retryResponse.content[0].text : '';
-    const scenario = JSON.parse(retryText) as FlirtScenario;
+    const retryRaw = retryResponse.content[0].type === 'text' ? retryResponse.content[0].text : '';
+    const scenario = JSON.parse(stripCodeFences(retryRaw)) as FlirtScenario;
     validateScenario(scenario);
     return scenario;
   }
@@ -170,6 +186,10 @@ Output ONLY this JSON structure:
 function validateScenario(scenario: FlirtScenario) {
   if (!scenario.steps || !Array.isArray(scenario.steps) || scenario.steps.length === 0) {
     throw new Error('Invalid scenario: no steps');
+  }
+  // Ensure result is accepted or rejected, default to accepted
+  if (scenario.result !== 'accepted' && scenario.result !== 'rejected') {
+    scenario.result = 'accepted';
   }
   for (const step of scenario.steps) {
     if (!ANIMATION_ACTIONS.includes(step.action)) {

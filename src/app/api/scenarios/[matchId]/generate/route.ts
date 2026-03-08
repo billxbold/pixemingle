@@ -19,7 +19,7 @@ export async function POST(
     .from('matches')
     .select('*, user_a:users!user_a_id(*), user_b:users!user_b_id(*)')
     .eq('id', matchId)
-    .eq('status', 'active')
+    .in('status', ['active', 'pending_b'])
     .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
     .single();
 
@@ -56,7 +56,10 @@ export async function POST(
   const gatekeeper = chaser === userA ? userB : userA;
 
   try {
-    const venue = match.final_venue as VenueName | undefined;
+    // Read venue from scenario_cache (final_venue column may not exist)
+    const cache = (match as Record<string, unknown>).scenario_cache as Record<string, unknown> | null
+    const proposal = cache?.proposal as Record<string, unknown> | undefined
+    const venue = (proposal?.chosen ?? proposal?.venue) as VenueName | undefined;
     const scenario = await generateScenario(
       matchId,
       attemptNumber,
@@ -73,12 +76,13 @@ export async function POST(
       scenario_data: scenario,
     });
 
-    // Update match attempt count and cache
+    // Update match attempt count — merge scenario into cache, preserving proposal data
+    const mergedCache = { ...cache, scenario };
     await db
       .from('matches')
       .update({
         attempt_count: attemptNumber,
-        scenario_cache: scenario,
+        scenario_cache: mergedCache,
         updated_at: new Date().toISOString(),
       })
       .eq('id', matchId);

@@ -59,7 +59,7 @@ export async function POST(
     .single();
 
   if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-  if (match.status !== 'active') {
+  if (!['active', 'pending_b'].includes(match.status)) {
     return NextResponse.json({ error: 'Match is not active' }, { status: 400 });
   }
 
