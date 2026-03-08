@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePixelWorld } from '@/hooks/usePixelWorld'
 import { useMatching } from '@/hooks/useMatching'
 import { useScenario } from '@/hooks/useScenario'
@@ -11,9 +11,10 @@ import { AgentChatBar } from './AgentChatBar'
 import { CandidateSlider } from './CandidateSlider'
 import { InvitationNotification } from './InvitationNotification'
 import { ChatPanel } from './ChatPanel'
+import { DevToolbar } from './DevToolbar'
 import { useChat } from '@/hooks/useChat'
 import type { SceneName } from '@/engine/sceneManager'
-import type { AgentAppearance, FlirtScenario } from '@/types/database'
+import type { AgentAppearance, Candidate, FlirtScenario } from '@/types/database'
 
 const SCENE_LABELS: Record<SceneName, string> = {
   home: 'Home',
@@ -28,12 +29,11 @@ const SCENE_LABELS: Record<SceneName, string> = {
 interface PixelWorldProps {
   matchId?: string | null
   role?: 'chaser' | 'gatekeeper'
-  chaserName?: string
   userAppearance?: AgentAppearance | null
   userId?: string
 }
 
-export function PixelWorld({ matchId: initialMatchId = null, role: initialRole = 'chaser', chaserName = 'Agent', userAppearance = null, userId = '' }: PixelWorldProps) {
+export function PixelWorld({ matchId: initialMatchId = null, role: initialRole = 'chaser', userAppearance = null, userId = '' }: PixelWorldProps) {
   const {
     worldStateRef,
     sceneManagerRef,
@@ -52,7 +52,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
 
   const journey = useJourneyState()
   const theaterStartedRef = useRef(false)
-  const { candidates, selectedCandidate, setSelectedCandidate, search, pass, proposeDate, respondVenue } = useMatching()
+  const { candidates, selectedCandidate, setSelectedCandidate, search, approve, pass, proposeDate, respondVenue } = useMatching()
   const {
     dateStatus,
     venueProposal,
@@ -64,6 +64,10 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   // Post-match human chat
   const chatMatchId = journey.state === 'POST_MATCH' ? (journey.matchId ?? initialMatchId) : null
   const { messages, sendMessage, isLoading: chatLoading } = useChat(chatMatchId)
+
+  // Partner info (fetched on match)
+  const [partnerName, setPartnerName] = useState('Agent')
+  const [partnerAppearance, setPartnerAppearance] = useState<AgentAppearance | null>(null)
 
   // Wire agent chat actions to journey transitions
   const handleAgentResponse = useCallback((text: string, action: string | null) => {
@@ -84,9 +88,31 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       })
     }
     if (action === 'approve' && journey.state === 'BROWSING' && selectedCandidate) {
-      journey.transition('PROPOSING')
+      handleSelectCandidate(selectedCandidate)
     }
-  }, [worldStateRef, playMontage, journey, search, selectedCandidate])
+  }, [worldStateRef, playMontage, journey, search, selectedCandidate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSelectCandidate = useCallback(async (candidate: Candidate) => {
+    setSelectedCandidate(candidate)
+    try {
+      const { matchId } = await approve(candidate.user.id, candidate.score, candidate.reasons)
+      setPartnerName(candidate.user.name)
+      setPartnerAppearance(candidate.user.agent_appearance)
+      journey.transition('PROPOSING', { matchId, role: 'chaser' })
+    } catch (err) {
+      console.error('Failed to approve candidate:', err)
+      const ch = worldStateRef.current?.characters.get(1)
+      if (ch) { ch.speechText = "Oops, something went wrong..."; ch.speechTimer = 3 }
+    }
+  }, [approve, journey, worldStateRef, setSelectedCandidate])
+
+  const handleFindAnother = useCallback(() => {
+    worldStateRef.current?.characters.delete(2)
+    setPartnerName('Agent')
+    setPartnerAppearance(null)
+    transitionTo('home')
+    journey.transition('HOME_IDLE')
+  }, [worldStateRef, transitionTo, journey])
 
   // Chaser transitions to WAITING after proposing
   useEffect(() => {
@@ -129,22 +155,12 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       }
 
       let scenario: FlirtScenario | null = null
-      let matchAppearance: AgentAppearance | null = null
 
       try {
         const res = await fetch(`/api/scenarios/${matchId}/generate`, { method: 'POST' })
         if (res.ok) {
           const data = await res.json()
           scenario = data.scenario ?? null
-        }
-        if (scenario) {
-          try {
-            const mRes = await fetch(`/api/matches/${matchId}`)
-            if (mRes.ok) {
-              const mData = await mRes.json()
-              matchAppearance = mData?.match_user?.appearance ?? null
-            }
-          } catch { /* use default */ }
         }
       } catch { /* network error */ }
 
@@ -169,7 +185,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
         }
       }
 
-      startTheater(scenario, matchAppearance, onTheaterComplete)
+      startTheater(scenario, partnerAppearance, onTheaterComplete)
     }
 
     // Dev shortcut: expose enterTheater on window for testing
@@ -212,6 +228,26 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     }
   })()
 
+  // Fetch partner name + appearance when matchId changes
+  useEffect(() => {
+    const mid = journey.matchId
+    if (!mid) return
+    let cancelled = false
+    fetch('/api/matches')
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const match = data.matches?.find((m: Record<string, unknown>) => m.id === mid)
+        if (match?.partner) {
+          setPartnerName((match.partner as { name: string }).name)
+          const appearance = (match.partner as { agent_appearance: AgentAppearance | null }).agent_appearance
+          if (appearance) setPartnerAppearance(appearance)
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [journey.matchId])
+
   const showChat = journey.state === 'POST_MATCH' && chatMatchId
 
   return (
@@ -236,7 +272,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
           {journey.state === 'BROWSING' && candidates && candidates.length > 0 && (
             <CandidateSlider
               candidates={candidates}
-              onSelect={(c) => setSelectedCandidate(c)}
+              onSelect={handleSelectCandidate}
               onPass={() => pass()}
               onAgentComment={(text) => {
                 const ch = worldStateRef.current?.characters.get(1)
@@ -248,26 +284,36 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
           {/* Gatekeeper invitation notification */}
           {dateStatus === 'proposed' && journey.state === 'HOME_IDLE' && (journey.role || initialRole) === 'gatekeeper' && venueProposal && (
             <InvitationNotification
-              chaserName={chaserName}
+              chaserName={partnerName}
               venue={venueProposal.venue}
               inviteText={venueProposal.text}
               onOpen={() => {}}
             />
           )}
 
-          {/* Date proposal overlay — hide during theater and post-match */}
-          {(journey.matchId || initialMatchId) && journey.state !== 'THEATER' && journey.state !== 'POST_MATCH' && (
+          {/* Date proposal overlay — only when relevant */}
+          {journey.matchId && (journey.state === 'PROPOSING' || journey.state === 'WAITING' || dateStatus === 'proposed' || dateStatus === 'accepted' || dateStatus === 'countered' || dateStatus === 'declined') && (
             <DateProposalOverlay
-              matchId={(journey.matchId || initialMatchId)!}
+              matchId={journey.matchId}
               role={journey.role || initialRole}
               dateStatus={dateStatus}
               venueProposal={venueProposal}
-              chaserName={chaserName}
+              chaserName={partnerName}
               onPropose={proposeDate}
               onRespond={respondVenue}
               onBroadcastProposal={broadcastDateProposal}
               onBroadcastResponse={broadcastVenueResponse}
             />
+          )}
+
+          {/* Find Another button in POST_MATCH */}
+          {journey.state === 'POST_MATCH' && (
+            <button
+              onClick={handleFindAnother}
+              className="absolute top-4 right-4 z-50 bg-pink-500 hover:bg-pink-600 text-white text-sm font-mono px-4 py-2 rounded-lg shadow-lg"
+            >
+              Find Another
+            </button>
           )}
         </div>
 
@@ -278,7 +324,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
               messages={messages}
               currentUserId={userId}
               partnerId="match"
-              partnerName={chaserName}
+              partnerName={partnerName}
               isLoading={chatLoading}
               onSendMessage={sendMessage}
               onSpeechBubble={(text) => {
@@ -292,6 +338,17 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
 
       {/* Agent chat bar — always at bottom */}
       <AgentChatBar onAgentResponse={handleAgentResponse} context={journeyContext} />
+
+      {/* Dev toolbar */}
+      <DevToolbar
+        journeyState={journey.state}
+        onTransition={journey.transition}
+        onTransitionScene={transitionTo}
+        onSetPartner={(name, appearance) => {
+          setPartnerName(name)
+          setPartnerAppearance(appearance)
+        }}
+      />
     </div>
   )
 }

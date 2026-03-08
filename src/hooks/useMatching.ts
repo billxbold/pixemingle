@@ -25,7 +25,9 @@ export function useMatching() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate_id: candidateId, score, reasons }),
     })
-    return res.json()
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    return { matchId: data.match.id as string, match: data.match }
   }, [])
 
   const pass = useCallback(async () => {
