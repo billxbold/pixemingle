@@ -130,18 +130,19 @@ export function PortraitPanel({
     return getCachedPortraitUrl(charId, emotion, variant, label)
   }, [])
 
-  if (!visible) return null
-
   const chaserActive = activeSpeaker === 'chaser'
   const gatekeeperActive = activeSpeaker === 'gatekeeper'
+
+  // Always render the container DOM to prevent mount/unmount flash.
+  // When not visible: collapsed with opacity-0. When visible but not preloaded: opacity-0.
+  // CSS transition smoothly fades in once preloaded.
 
   return (
     <div
       className={`
         w-full transition-all duration-300 ease-out
-        ${preloaded ? 'opacity-100' : 'opacity-0'}
+        ${!visible ? 'opacity-0 h-0 overflow-hidden pointer-events-none' : preloaded ? 'opacity-100' : 'opacity-0'}
       `}
-      style={{ height: visible ? undefined : 0 }}
     >
       {/* Panel container */}
       <div className="relative bg-[#0a0a0a] border-t border-gray-800 px-4 py-3">

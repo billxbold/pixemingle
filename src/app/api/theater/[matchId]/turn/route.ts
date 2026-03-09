@@ -5,24 +5,9 @@ import { sendWebhook } from '@/lib/webhooks'
 import { getAllAtomIds } from '@/engine/comedyAtoms'
 import { NextRequest, NextResponse } from 'next/server'
 import type { ActionType, ComedyIntent, EmotionState, TheaterTurn } from '@/types/database'
-
-const VALID_ACTIONS: ActionType[] = [
-  'deliver_line', 'react', 'use_prop', 'physical_comedy',
-  'environment_interact', 'signature_move', 'entrance', 'exit',
-]
-const VALID_EMOTIONS: EmotionState[] = [
-  'neutral', 'nervous', 'confident', 'embarrassed', 'excited',
-  'dejected', 'amused', 'annoyed', 'hopeful', 'devastated',
-  'smug', 'shy', 'trying_too_hard', 'genuinely_happy', 'cringing',
-]
-const VALID_INTENTS: ComedyIntent[] = [
-  'self_deprecating', 'witty', 'physical', 'observational',
-  'deadpan', 'absurdist', 'romantic_sincere', 'teasing', 'callback',
-]
+import { VALID_ACTIONS, VALID_EMOTIONS, VALID_INTENTS, MAX_THEATER_TURNS, MIN_TURNS_BEFORE_EXIT } from '@/lib/theaterEnums'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const MAX_THEATER_TURNS = 20
-const MIN_TURNS_BEFORE_EXIT = 4
 
 export async function POST(
   request: NextRequest,

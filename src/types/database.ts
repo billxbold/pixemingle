@@ -73,7 +73,7 @@ export type ComedyIntent =
   | 'deadpan' | 'absurdist' | 'romantic_sincere' | 'teasing' | 'callback';
 
 export type TheaterStatus =
-  | 'entrance' | 'active' | 'deciding' | 'completed_accepted' | 'completed_rejected';
+  | 'entrance' | 'active' | 'completed_accepted' | 'completed_rejected';
 
 export interface TheaterTurn {
   id: string;
@@ -209,6 +209,18 @@ export interface Candidate {
   user: User;
   score: number;
   reasons: MatchReasons;
+}
+
+// ============================================================
+// Notification Data Payloads
+// ============================================================
+
+export interface TheaterTurnNotificationData {
+  match_id: string;
+  turn_number: number;
+  action: ActionType;
+  emotion: EmotionState;
+  outcome: 'accepted' | 'rejected' | null;
 }
 
 // ============================================================

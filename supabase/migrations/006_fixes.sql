@@ -1,5 +1,6 @@
 -- 006_fixes.sql
--- Schema fixes: NOT NULL constraints, CHECK constraints, RLS, indexes, cascades, purchase status
+-- Consolidated schema fixes: NOT NULL constraints, CHECK constraints, RLS, indexes, cascades, purchase status
+-- Idempotent: safe to run multiple times (uses IF NOT EXISTS, DROP IF EXISTS patterns)
 
 BEGIN;
 
@@ -51,14 +52,14 @@ ALTER TABLE matches ALTER COLUMN theater_turn_count SET NOT NULL;
 UPDATE chat_messages SET created_at = NOW() WHERE created_at IS NULL;
 ALTER TABLE chat_messages ALTER COLUMN created_at SET NOT NULL;
 
--- notifications.created_at
-UPDATE notifications SET created_at = NOW() WHERE created_at IS NULL;
-ALTER TABLE notifications ALTER COLUMN created_at SET NOT NULL;
-
 -- notifications.data (set default first, then backfill, then NOT NULL)
 ALTER TABLE notifications ALTER COLUMN data SET DEFAULT '{}';
 UPDATE notifications SET data = '{}' WHERE data IS NULL;
 ALTER TABLE notifications ALTER COLUMN data SET NOT NULL;
+
+-- notifications.created_at
+UPDATE notifications SET created_at = NOW() WHERE created_at IS NULL;
+ALTER TABLE notifications ALTER COLUMN created_at SET NOT NULL;
 
 -- theater_turns.created_at (from 005)
 UPDATE theater_turns SET created_at = NOW() WHERE created_at IS NULL;
@@ -72,6 +73,10 @@ ALTER TABLE agent_memories ALTER COLUMN created_at SET NOT NULL;
 UPDATE agent_memories SET updated_at = NOW() WHERE updated_at IS NULL;
 ALTER TABLE agent_memories ALTER COLUMN updated_at SET NOT NULL;
 
+-- entrance_configs.conditionals (from 005)
+UPDATE entrance_configs SET conditionals = '[]' WHERE conditionals IS NULL;
+ALTER TABLE entrance_configs ALTER COLUMN conditionals SET NOT NULL;
+
 -- entrance_configs.updated_at (from 005)
 UPDATE entrance_configs SET updated_at = NOW() WHERE updated_at IS NULL;
 ALTER TABLE entrance_configs ALTER COLUMN updated_at SET NOT NULL;
@@ -81,19 +86,39 @@ UPDATE comedy_atom_unlocks SET unlocked_at = NOW() WHERE unlocked_at IS NULL;
 ALTER TABLE comedy_atom_unlocks ALTER COLUMN unlocked_at SET NOT NULL;
 
 -- ============================================================
--- 2. VENUE CHECK CONSTRAINTS
+-- 2. VENUE CHECK CONSTRAINTS (allow NULLs — venues are optional until proposed)
 -- ============================================================
 
+ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_proposed_venue_check;
 ALTER TABLE matches ADD CONSTRAINT matches_proposed_venue_check
-  CHECK (proposed_venue IN ('lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum'));
+  CHECK (proposed_venue IS NULL OR proposed_venue IN ('lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum'));
+
+ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_final_venue_check;
 ALTER TABLE matches ADD CONSTRAINT matches_final_venue_check
-  CHECK (final_venue IN ('lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum'));
+  CHECK (final_venue IS NULL OR final_venue IN ('lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum'));
 
 -- ============================================================
--- 3. ENABLE RLS ON openclaw_agents
+-- 3. FIX theater_status CHECK — remove unused 'deciding' value
+-- ============================================================
+
+ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_theater_status_check;
+ALTER TABLE matches ADD CONSTRAINT matches_theater_status_check
+  CHECK (theater_status IS NULL OR theater_status IN (
+    'entrance', 'active', 'completed_accepted', 'completed_rejected'
+  ));
+
+-- ============================================================
+-- 4. ENABLE RLS ON openclaw_agents
 -- ============================================================
 
 ALTER TABLE openclaw_agents ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first (idempotent)
+DROP POLICY IF EXISTS "Users can read own agent" ON openclaw_agents;
+DROP POLICY IF EXISTS "Users can view own agent" ON openclaw_agents;
+DROP POLICY IF EXISTS "Users can update own agent" ON openclaw_agents;
+DROP POLICY IF EXISTS "Service role can manage agents" ON openclaw_agents;
+DROP POLICY IF EXISTS "Service role full access to agents" ON openclaw_agents;
 
 CREATE POLICY "Users can read own agent" ON openclaw_agents
   FOR SELECT USING (auth.uid() = user_id);
@@ -105,7 +130,7 @@ CREATE POLICY "Service role can manage agents" ON openclaw_agents
   FOR ALL USING (auth.role() = 'service_role');
 
 -- ============================================================
--- 4. NOTE ON users SELECT RLS POLICY
+-- 5. NOTE ON users SELECT RLS POLICY
 -- ============================================================
 
 -- The "Users can read other profiles for matching" policy uses USING (true),
@@ -115,11 +140,10 @@ CREATE POLICY "Service role can manage agents" ON openclaw_agents
 -- with one that restricts readable columns or limits to non-blocked users.
 
 -- ============================================================
--- 5. FK ON DELETE CASCADE FOR matches
+-- 6. FK ON DELETE CASCADE FOR matches
 -- ============================================================
 
 -- Recreate foreign keys with ON DELETE CASCADE
--- (001 already had ON DELETE CASCADE, but let's ensure consistency)
 ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_user_a_id_fkey;
 ALTER TABLE matches ADD CONSTRAINT matches_user_a_id_fkey
   FOREIGN KEY (user_a_id) REFERENCES users(id) ON DELETE CASCADE;
@@ -129,7 +153,7 @@ ALTER TABLE matches ADD CONSTRAINT matches_user_b_id_fkey
   FOREIGN KEY (user_b_id) REFERENCES users(id) ON DELETE CASCADE;
 
 -- ============================================================
--- 6. MISSING INDEXES
+-- 7. MISSING INDEXES
 -- ============================================================
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_match_created
@@ -142,7 +166,7 @@ CREATE INDEX IF NOT EXISTS idx_matches_theater_status
   ON matches(theater_status) WHERE theater_status IS NOT NULL;
 
 -- ============================================================
--- 7. PURCHASE STATUS COLUMN
+-- 8. PURCHASE STATUS COLUMN
 -- ============================================================
 
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS status TEXT
@@ -150,7 +174,7 @@ ALTER TABLE purchases ADD COLUMN IF NOT EXISTS status TEXT
   CHECK (status IN ('pending', 'completed', 'failed'))
   NOT NULL;
 
--- Mark all existing purchases as completed (pre-date this tracking)
+-- Mark all existing purchases as completed (pre-dates this tracking)
 UPDATE purchases SET status = 'completed' WHERE status = 'pending';
 
 COMMIT;

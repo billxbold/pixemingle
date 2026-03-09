@@ -203,6 +203,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     if (theater.status !== 'complete') return
     if (theaterCompletedRef.current) return
     theaterCompletedRef.current = true
+    worldStateRef.current?.resetTheater()
     if (theater.outcome === 'accepted') {
       journey.transition('POST_MATCH')
     } else if (theater.outcome === 'rejected') {
@@ -277,6 +278,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   // Wire realtime events to journey transitions + theater entry
   useEffect(() => {
     const enterTheater = (venue: SceneName) => {
+      worldStateRef.current?.resetTheater()
       theaterStartedRef.current = true
       transitionTo(venue)
       journey.transition('THEATER')

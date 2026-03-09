@@ -430,6 +430,15 @@ export class WorldState {
     player.playSequence(atomIds, onComplete)
   }
 
+  /** Reset all theater-related state (atoms, camera, body modifiers) */
+  resetTheater(): void {
+    this.atomPlayers.clear()
+    this.cameraSystem.forceReset()
+    for (const ch of this.characters.values()) {
+      ch.activeBodyModifier = undefined
+    }
+  }
+
   /** Check if a character is playing atoms */
   isPlayingAtoms(characterId: number): boolean {
     const player = this.atomPlayers.get(characterId)
