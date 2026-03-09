@@ -23,44 +23,39 @@ export async function GET() {
   const isChaser = m.user_a_id === userId
   const role = isChaser ? 'chaser' : 'gatekeeper'
 
-  // Check theater status via theater_turns and match theater_status
-  if (m.status === 'venue_confirmed' || m.final_venue) {
-    const theaterStatus = m.theater_status as string | null
-    if (theaterStatus === 'completed_accepted' || theaterStatus === 'completed_rejected') {
-      return NextResponse.json({ state: 'POST_MATCH', matchId: m.id, role })
-    }
-    // Theater in progress or not started
-    const venue = (m.final_venue ?? m.proposed_venue ?? 'lounge') as string
+  // Check theater status from match columns (no scenario_cache)
+  const theaterStatus = m.theater_status as string | null
+  const proposedVenue = m.proposed_venue as string | null
+  const finalVenue = m.final_venue as string | null
+
+  // Theater in progress or completed
+  if (theaterStatus === 'entrance' || theaterStatus === 'active') {
+    const venue = (finalVenue ?? proposedVenue ?? 'lounge') as string
     return NextResponse.json({ state: 'THEATER', matchId: m.id, role, venue })
   }
+  if (theaterStatus === 'completed_accepted') {
+    return NextResponse.json({ state: 'POST_MATCH', matchId: m.id, role })
+  }
+  if (theaterStatus === 'completed_rejected') {
+    return NextResponse.json({ state: 'HOME_IDLE', matchId: m.id, role })
+  }
 
-  // Check for venue proposal stored in scenario_cache JSONB
-  const cache = m.scenario_cache as Record<string, unknown> | null
-  const proposal = cache?.proposal as Record<string, unknown> | undefined
-
-  if (proposal?.venue) {
-    const response = proposal.response as string | undefined
-    const finalVenue = (response === 'countered' && proposal.chosen) ? proposal.chosen : proposal.venue
-
-    // Already accepted/countered — both sides should enter theater
-    if (response === 'accepted' || response === 'countered') {
+  // Venue proposed but no theater_status yet
+  if (proposedVenue) {
+    // Venue accepted (final_venue exists) — should be in theater
+    if (finalVenue) {
       return NextResponse.json({ state: 'THEATER', matchId: m.id, role, venue: finalVenue })
     }
-    // Declined — back to idle
-    if (response === 'declined') {
-      return NextResponse.json({ state: 'HOME_IDLE', matchId: m.id, role })
-    }
-
-    // Proposal pending response
+    // Venue proposed but not yet accepted — chaser waits, gatekeeper sees invitation
     if (isChaser) {
       return NextResponse.json({
         state: 'WAITING', matchId: m.id, role,
-        dateStatus: 'proposed', venue: proposal.venue,
+        dateStatus: 'proposed', venue: proposedVenue,
       })
     } else {
       return NextResponse.json({
-        state: 'HOME_IDLE', matchId: m.id, role,
-        dateStatus: 'proposed', venue: proposal.venue, inviteText: (proposal.text as string) ?? '',
+        state: 'PROPOSING', matchId: m.id, role,
+        dateStatus: 'proposed', venue: proposedVenue,
       })
     }
   }

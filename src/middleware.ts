@@ -5,6 +5,11 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
 
+  // Block /dev/* routes in production
+  if (process.env.NODE_ENV !== 'development' && request.nextUrl.pathname.startsWith('/dev')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
   // Dev mode: allow /world access without auth for testing
   const devUserId = request.cookies.get('dev-user-id')?.value
   if (process.env.NODE_ENV === 'development' && devUserId) {
@@ -52,5 +57,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/world/:path*', '/api/:path*'],
+  matcher: ['/world/:path*', '/api/:path*', '/dev/:path*'],
 }

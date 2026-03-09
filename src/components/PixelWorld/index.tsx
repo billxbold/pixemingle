@@ -5,6 +5,7 @@ import { usePixelWorld } from '@/hooks/usePixelWorld'
 import { useMatching } from '@/hooks/useMatching'
 import { useDateSync } from '@/hooks/useDateSync'
 import { useJourneyState } from '@/hooks/useJourneyState'
+import { useTheater } from '@/hooks/useTheater'
 import { Canvas } from './Canvas'
 import { DateProposalOverlay } from './DateProposalOverlay'
 import { AgentChatBar } from './AgentChatBar'
@@ -52,12 +53,12 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     setZoom,
     transitionTo,
     playMontage,
-    startTheater,
     onFrameUpdate,
   } = usePixelWorld(userAppearance ?? undefined)
 
   const journey = useJourneyState()
   const theaterStartedRef = useRef(false)
+  const theaterCompletedRef = useRef(false)
   const { candidates, selectedCandidate, setSelectedCandidate, search, approve, pass, proposeDate, respondVenue } = useMatching()
   const {
     dateStatus,
@@ -75,14 +76,27 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   const [partnerName, setPartnerName] = useState('Agent')
   const [partnerAppearance, setPartnerAppearance] = useState<AgentAppearance | null>(null)
 
-  // Portrait panel state (theater)
-  const [chaserEmotion, setChaserEmotion] = useState<PortraitExpression>('neutral')
-  const [gatekeeperEmotion, setGatekeeperEmotion] = useState<PortraitExpression>('neutral')
-  const [activeSpeaker, setActiveSpeaker] = useState<'chaser' | 'gatekeeper' | null>(null)
-  const [speechText, setSpeechText] = useState<string | null>(null)
+  // Theater hook — active during THEATER journey state
+  const theaterMatchId = journey.state === 'THEATER' ? (journey.matchId ?? initialMatchId) : null
+  const theater = useTheater(theaterMatchId, userId)
+
+  // Portrait panel state — driven by theater when active, manual otherwise
   const defaultPrefs = useRef<ExpressionPreferences>(parseExpressionPreferences(''))
-  const [chaserSoulPrefs, setChaserSoulPrefs] = useState<ExpressionPreferences>(defaultPrefs.current)
-  const [gatekeeperSoulPrefs, setGatekeeperSoulPrefs] = useState<ExpressionPreferences>(defaultPrefs.current)
+  const [manualChaserEmotion, setManualChaserEmotion] = useState<PortraitExpression>('neutral')
+  const [manualGatekeeperEmotion, setManualGatekeeperEmotion] = useState<PortraitExpression>('neutral')
+  const [manualActiveSpeaker, setManualActiveSpeaker] = useState<'chaser' | 'gatekeeper' | null>(null)
+  const [manualSpeechText, setManualSpeechText] = useState<string | null>(null)
+  const [manualChaserSoulPrefs, setManualChaserSoulPrefs] = useState<ExpressionPreferences>(defaultPrefs.current)
+  const [manualGatekeeperSoulPrefs, setManualGatekeeperSoulPrefs] = useState<ExpressionPreferences>(defaultPrefs.current)
+
+  // Use theater-driven values when theater is active, manual otherwise
+  const isTheaterActive = theater.status !== 'idle'
+  const chaserEmotion = isTheaterActive ? theater.chaserEmotion : manualChaserEmotion
+  const gatekeeperEmotion = isTheaterActive ? theater.gatekeeperEmotion : manualGatekeeperEmotion
+  const activeSpeaker = isTheaterActive ? theater.activeSpeaker : manualActiveSpeaker
+  const speechText = isTheaterActive ? theater.speechText : manualSpeechText
+  const chaserSoulPrefs = isTheaterActive ? theater.chaserSoulPrefs : manualChaserSoulPrefs
+  const gatekeeperSoulPrefs = isTheaterActive ? theater.gatekeeperSoulPrefs : manualGatekeeperSoulPrefs
 
   // Derive character IDs for portraits
   const chaserCharId = userAppearance?.premadeIndex
@@ -94,7 +108,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
 
   /**
    * Updates portrait panel from a theater turn.
-   * Called by useTheater (Phase 5) or dev toolbar for testing.
+   * Used by dev toolbar for manual testing. Theater hook drives this automatically.
    */
   const updatePortraitFromTurn = useCallback((turn: {
     agent_role: 'chaser' | 'gatekeeper'
@@ -102,27 +116,100 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     text?: string
     soul_md?: string
   }) => {
-    const prefs = turn.agent_role === 'chaser' ? chaserSoulPrefs : gatekeeperSoulPrefs
+    const prefs = turn.agent_role === 'chaser' ? manualChaserSoulPrefs : manualGatekeeperSoulPrefs
     const config = resolveExpression(turn.emotion, prefs)
 
     if (turn.agent_role === 'chaser') {
-      setChaserEmotion(config.portrait)
+      setManualChaserEmotion(config.portrait)
     } else {
-      setGatekeeperEmotion(config.portrait)
+      setManualGatekeeperEmotion(config.portrait)
     }
 
-    setActiveSpeaker(turn.agent_role)
-    setSpeechText(turn.text ?? null)
-  }, [chaserSoulPrefs, gatekeeperSoulPrefs])
+    setManualActiveSpeaker(turn.agent_role)
+    setManualSpeechText(turn.text ?? null)
+  }, [manualChaserSoulPrefs, manualGatekeeperSoulPrefs])
 
-  // Expose updatePortraitFromTurn for Phase 5 integration and dev testing
+  // Connect particle system to world state for atom triggers
+  useEffect(() => {
+    if (worldStateRef.current && particlesRef.current) {
+      worldStateRef.current.setParticleSystem(particlesRef.current)
+    }
+  }, [worldStateRef, particlesRef])
+
+  // Expose for dev testing
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       (window as unknown as Record<string, unknown>).__updatePortrait = updatePortraitFromTurn;
-      (window as unknown as Record<string, unknown>).__setChaserSoulPrefs = setChaserSoulPrefs;
-      (window as unknown as Record<string, unknown>).__setGatekeeperSoulPrefs = setGatekeeperSoulPrefs;
+      (window as unknown as Record<string, unknown>).__setChaserSoulPrefs = setManualChaserSoulPrefs;
+      (window as unknown as Record<string, unknown>).__setGatekeeperSoulPrefs = setManualGatekeeperSoulPrefs;
     }
   }, [updatePortraitFromTurn])
+
+  // Wire theater turn rendering to canvas (atom playback + body modifiers)
+  useEffect(() => {
+    if (!theater.renderingTurn || !worldStateRef.current) return
+    const turn = theater.renderingTurn
+    const ws = worldStateRef.current
+    const characterId = turn.agent_role === 'chaser' ? 1 : 2
+    const ch = ws.characters.get(characterId)
+    if (!ch) {
+      theater.onTurnRendered()
+      return
+    }
+
+    // Apply body modifier from expression
+    const prefs = turn.agent_role === 'chaser' ? theater.chaserSoulPrefs : theater.gatekeeperSoulPrefs
+    const expr = resolveExpression(turn.emotion, prefs)
+    ch.activeBodyModifier = expr.body_modifier
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    // Play comedy atoms if any
+    if (turn.comedy_atoms && turn.comedy_atoms.length > 0) {
+      ws.playAtoms(characterId, turn.comedy_atoms, () => {
+        theater.onTurnRendered()
+      })
+    } else {
+      // No atoms — auto-complete after speech display time
+      const displayTime = turn.text ? Math.max(2000, turn.text.length * 60) : 1500
+      timeoutId = setTimeout(() => theater.onTurnRendered(), displayTime)
+    }
+
+    // Spawn particles from expression, accounting for atom player offsets
+    if (expr.particles.length > 0 && particlesRef.current) {
+      const atomPlayer = ws.getAtomPlayer(characterId)
+      const atomAdj = atomPlayer?.getCurrentAdjustments()
+      const atomOffX = atomAdj?.offsetX ?? 0
+      const atomOffY = atomAdj?.offsetY ?? 0
+      for (const pType of expr.particles) {
+        particlesRef.current.spawn(pType, ch.x + atomOffX, ch.y - 24 + atomOffY, 1)
+      }
+    }
+
+    return () => {
+      if (timeoutId !== null) clearTimeout(timeoutId)
+    }
+  }, [theater.renderingTurn]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset theater completed ref when entering theater
+  useEffect(() => {
+    if (journey.state === 'THEATER') {
+      theaterCompletedRef.current = false
+    }
+  }, [journey.state])
+
+  // Theater completion → journey transition (guarded against double-fire)
+  useEffect(() => {
+    if (theater.status !== 'complete') return
+    if (theaterCompletedRef.current) return
+    theaterCompletedRef.current = true
+    if (theater.outcome === 'accepted') {
+      journey.transition('POST_MATCH')
+    } else if (theater.outcome === 'rejected') {
+      journey.transition('HOME_IDLE')
+      transitionTo('home')
+    }
+  }, [theater.status, theater.outcome]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectCandidate = useCallback(async (candidate: Candidate) => {
     setSelectedCandidate(candidate)
@@ -189,24 +276,33 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
 
   // Wire realtime events to journey transitions + theater entry
   useEffect(() => {
-    const enterTheater = async (venue: SceneName) => {
+    const enterTheater = (venue: SceneName) => {
       theaterStartedRef.current = true
       transitionTo(venue)
       journey.transition('THEATER')
 
-      // Theater entry — rewired in Phase 5 (useTheater)
-      // For now, start the no-op theater stub
-      const matchId = journey.matchId ?? initialMatchId
-      if (!matchId) return
+      // Spawn partner character if not present
+      const ws = worldStateRef.current
+      if (ws && !ws.characters.has(2)) {
+        ws.addAgent(2, 3, 0, undefined, true)
+      }
+      const ch2 = ws?.characters.get(2)
+      if (ch2) {
+        ch2.appearance = partnerAppearance ?? { body: 1, eyes: 1, outfit: 'Outfit_01_48x48_01', hairstyle: 'Hairstyle_01_48x48_01', premadeIndex: 8 }
+        ch2.sheetCanvas = undefined
+      }
 
-      startTheater(partnerAppearance, (result: string) => {
-        if (result === 'rejected') {
-          transitionTo('home')
-          journey.transition('HOME_IDLE')
-        } else {
-          journey.transition('POST_MATCH')
-        }
-      })
+      // Position characters facing each other in venue
+      const ch1 = ws?.characters.get(1)
+      if (ch1 && ch2 && ws) {
+        const cx = (ws.layout.cols * 48) / 2
+        const cy = (ws.layout.rows * 48) / 2
+        ch1.x = cx - 72; ch1.y = cy; ch1.tileCol = Math.floor((cx - 72) / 48); ch1.tileRow = Math.floor(cy / 48)
+        ch2.x = cx + 72; ch2.y = cy; ch2.tileCol = Math.floor((cx + 72) / 48); ch2.tileRow = Math.floor(cy / 48)
+        ch1.path = []; ch2.path = []
+      }
+
+      // Theater hook (useTheater) now drives playback via realtime subscription
     }
 
     // Dev shortcut: expose enterTheater on window for testing
@@ -234,7 +330,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       const venue = (journey.recoveredVenue ?? 'lounge') as SceneName
       enterTheater(venue)
     }
-  }, [dateStatus, journey, venueProposal, reactionData, transitionTo, startTheater, initialMatchId, partnerAppearance])
+  }, [dateStatus, journey, venueProposal, reactionData, transitionTo, initialMatchId, partnerAppearance, worldStateRef])
 
   const journeyContext = (() => {
     switch (journey.state) {

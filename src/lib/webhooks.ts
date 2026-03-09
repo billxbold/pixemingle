@@ -30,7 +30,8 @@ export async function sendWebhook(webhookUrl: string, payload: {
   event: string;
   match_id: string;
   theater_url?: string;
-  summary: string;
+  summary?: string;
+  turn?: unknown;
 }) {
   try {
     // Validate URL scheme
