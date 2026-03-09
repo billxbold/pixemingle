@@ -46,6 +46,63 @@ import {
   ROTATE_BUTTON_BG,
 } from '../constants'
 
+// ── White outline glow for main characters ─────────────────────
+
+/** Offscreen canvas for creating white silhouettes (reused to avoid GC pressure) */
+let _outlineCanvas: OffscreenCanvas | null = null
+let _outlineCtx: OffscreenCanvasRenderingContext2D | null = null
+
+/**
+ * Draw a white pixel-perfect outline around a sprite by rendering
+ * a white silhouette offset by 1px in 4 cardinal directions,
+ * then drawing the original sprite on top.
+ *
+ * Only used for main characters (not NPCs).
+ */
+function drawWithWhiteOutline(
+  ctx: CanvasRenderingContext2D,
+  sheet: CanvasImageSource,
+  sx: number, sy: number, sw: number, sh: number,
+  dx: number, dy: number, dw: number, dh: number,
+  outlineWidth: number,
+): void {
+  // Ensure offscreen canvas is large enough
+  const needed_w = dw + outlineWidth * 2
+  const needed_h = dh + outlineWidth * 2
+  if (!_outlineCanvas || _outlineCanvas.width < needed_w || _outlineCanvas.height < needed_h) {
+    _outlineCanvas = new OffscreenCanvas(needed_w, needed_h)
+    _outlineCtx = _outlineCanvas.getContext('2d')!
+  }
+  const oc = _outlineCtx!
+  const pad = outlineWidth
+
+  // Clear the region we'll use
+  oc.clearRect(0, 0, needed_w, needed_h)
+
+  // Draw the sprite onto the offscreen canvas (centered with padding)
+  oc.imageSmoothingEnabled = false
+  oc.drawImage(sheet, sx, sy, sw, sh, pad, pad, dw, dh)
+
+  // Create white silhouette: fill all opaque pixels with white
+  oc.save()
+  oc.globalCompositeOperation = 'source-in'
+  oc.fillStyle = '#FFFFFF'
+  oc.fillRect(0, 0, needed_w, needed_h)
+  oc.restore()
+
+  // Draw the white silhouette offset in 4 directions
+  const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+  for (const [ox, oy] of offsets) {
+    ctx.drawImage(_outlineCanvas, 0, 0, needed_w, needed_h,
+      dx - pad + ox * outlineWidth, dy - pad + oy * outlineWidth,
+      needed_w, needed_h)
+  }
+
+  // Draw original sprite on top (sharp, no smoothing)
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(sheet, sx, sy, sw, sh, dx, dy, dw, dh)
+}
+
 // ── Render functions ────────────────────────────────────────────
 
 export function renderTileGrid(
@@ -197,12 +254,18 @@ export function renderScene(
       }
 
       const ga = ghostAlpha
+      const shouldOutline = !ch.isNpc
+      const olWidth = Math.max(1, Math.round(zoom * 0.5))
       drawables.push({
         zY: charZY,
         draw: (c) => {
-          c.imageSmoothingEnabled = false
           if (ga < 1) { c.save(); c.globalAlpha = ga }
-          c.drawImage(sheet, sx, sy, CHAR_FRAME_SIZE, srcH, drawX, drawY, dw, dh)
+          if (shouldOutline) {
+            drawWithWhiteOutline(c, sheet, sx, sy, CHAR_FRAME_SIZE, srcH, drawX, drawY, dw, dh, olWidth)
+          } else {
+            c.imageSmoothingEnabled = false
+            c.drawImage(sheet, sx, sy, CHAR_FRAME_SIZE, srcH, drawX, drawY, dw, dh)
+          }
           if (ga < 1) c.restore()
         },
       })
@@ -248,11 +311,20 @@ export function renderScene(
     }
 
     const ga2 = ghostAlpha
+    const shouldOutline2 = !ch.isNpc
+    const olWidth2 = Math.max(1, Math.round(zoom * 0.5))
     drawables.push({
       zY: charZY,
       draw: (c) => {
         if (ga2 < 1) { c.save(); c.globalAlpha = ga2 }
-        c.drawImage(cached, drawX, drawY)
+        if (shouldOutline2) {
+          // Create a temp canvas from the cached sprite to use drawWithWhiteOutline
+          drawWithWhiteOutline(c, cached,
+            0, 0, cached.width, cached.height,
+            drawX, drawY, cached.width, cached.height, olWidth2)
+        } else {
+          c.drawImage(cached, drawX, drawY)
+        }
         if (ga2 < 1) c.restore()
       },
     })

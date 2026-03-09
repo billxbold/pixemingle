@@ -224,4 +224,6 @@ export interface Character {
   theaterRole?: 'chaser' | 'gatekeeper'
   activeBodyModifier?: BodyModifier
   activeEmotion?: import('@/types/database').EmotionState
+  /** If true, character is an NPC (no white outline glow, muted visual priority) */
+  isNpc?: boolean
 }
