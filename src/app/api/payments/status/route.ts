@@ -7,7 +7,10 @@ export async function GET() {
 
   const db = createServiceClient();
   const { data: profile, error } = await db.from('users').select('tier').eq('id', userId).single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Failed to check payment status:', error.message);
+    return NextResponse.json({ error: 'Failed to check payment status' }, { status: 500 });
+  }
 
   return NextResponse.json({ tier: profile?.tier || 'free' });
 }

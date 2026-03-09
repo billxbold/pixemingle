@@ -185,7 +185,6 @@ export interface Match {
   status: 'pending_b' | 'active' | 'rejected' | 'expired' | 'unmatched';
   match_score: number | null;
   match_reasons: MatchReasons | null;
-  scenario_cache: unknown | null;
   attempt_count: number;
   proposed_venue: VenueName | null;
   final_venue: VenueName | null;
@@ -247,5 +246,18 @@ export interface Notification {
   type: NotificationType;
   data: Record<string, unknown>;
   read: boolean;
+  created_at: string;
+}
+
+// ============================================================
+// Purchases
+// ============================================================
+
+export interface Purchase {
+  id: string;
+  user_id: string;
+  cosmetic_id: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'failed';
   created_at: string;
 }

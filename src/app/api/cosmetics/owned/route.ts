@@ -11,6 +11,7 @@ export async function GET() {
     .select('item_id, item_type, amount_cents, created_at')
     .eq('user_id', userId)
     .eq('item_type', 'cosmetic')
+    .eq('status', 'completed')
     .order('created_at', { ascending: false });
 
   if (error) {

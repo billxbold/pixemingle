@@ -1,9 +1,15 @@
 import { createServiceClient, getAuthUserId } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { checkEndpointRateLimit } from '@/lib/rate-limit';
 
 export async function GET() {
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'matches-get', 30, 60);
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
 
   const db = createServiceClient();
 

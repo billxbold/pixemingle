@@ -1,6 +1,7 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { sendWebhook } from '@/lib/webhooks'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -8,11 +9,22 @@ export async function POST(request: Request) {
   const userId = await getAuthUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const rateLimitResult = checkEndpointRateLimit(userId, 'matching_respond', 20, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   try {
     const db = createServiceClient()
 
-    const { match_id, response } = await request.json()
-    if (!match_id || !['approve', 'decline'].includes(response)) {
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+    const { match_id, response } = body as { match_id?: string; response?: string }
+    if (!match_id || !response || !['approve', 'decline'].includes(response)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
     if (!UUID_REGEX.test(match_id)) {

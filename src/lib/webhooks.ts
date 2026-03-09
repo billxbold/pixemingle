@@ -12,7 +12,7 @@ const PRIVATE_IP_PATTERNS = [
   /^\[fe80:/,
 ]
 
-function isPrivateUrl(urlString: string): boolean {
+export function isPrivateUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString)
     const hostname = url.hostname

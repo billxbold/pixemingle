@@ -1,5 +1,6 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
 export async function GET() {
   const userId = await getAuthUserId()
@@ -17,6 +18,11 @@ export async function GET() {
 export async function PUT(request: Request) {
   const userId = await getAuthUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'profile-put', 20, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
 
   let body: Record<string, unknown>
   try {

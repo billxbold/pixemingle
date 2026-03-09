@@ -5,10 +5,16 @@ import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
   try {
-    // Require gateway secret for registration
+    // Require gateway secret for registration — timing-safe comparison
     const authHeader = request.headers.get('Authorization')
     const expectedSecret = process.env.OPENCLAW_GATEWAY_SECRET
-    if (!expectedSecret || !authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+    if (!expectedSecret || !authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const providedSecret = authHeader.slice(7)
+    const a = Buffer.from(providedSecret)
+    const b = Buffer.from(expectedSecret)
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -26,7 +32,11 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
-    const { profile, webhook_url } = body as { profile: Record<string, unknown> | undefined; webhook_url: string | undefined }
+    const { profile, webhook_url, email } = body as {
+      profile: Record<string, unknown> | undefined
+      webhook_url: string | undefined
+      email: string | undefined
+    }
 
     if (!profile?.name || !webhook_url) {
       return NextResponse.json(
@@ -35,11 +45,11 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate webhook_url
+    // Validate webhook_url — require HTTPS only
     try {
       const parsed = new URL(webhook_url)
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        return NextResponse.json({ error: 'webhook_url must use http or https' }, { status: 400 })
+      if (parsed.protocol !== 'https:') {
+        return NextResponse.json({ error: 'webhook_url must use https' }, { status: 400 })
       }
       const host = parsed.hostname
       if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.startsWith('10.') || host.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
@@ -49,20 +59,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid webhook_url' }, { status: 400 })
     }
 
+    // Use provided email or generate a placeholder from the webhook URL host
+    const userEmail = (typeof email === 'string' && email.includes('@'))
+      ? email
+      : `tier2+${crypto.randomUUID().slice(0, 8)}@${new URL(webhook_url).hostname}`
+
     const supabase = createServiceClient()
 
-    // Create user in users table
+    // Create user in users table — use correct column names matching schema
     const { data: user, error: userError } = await supabase
       .from('users')
       .insert({
-        display_name: profile.name,
-        age: profile.age || null,
-        gender: profile.gender || null,
-        looking_for: profile.looking_for || null,
-        soul_type: profile.soul_type || null,
-        bio: profile.bio || null,
-        agent_appearance: profile.agent_appearance || null,
-        onboarding_complete: true,
+        email: userEmail,
+        name: profile.name as string,
+        age: typeof profile.age === 'number' ? profile.age : 18,
+        gender: typeof profile.gender === 'string' ? profile.gender : 'nonbinary',
+        looking_for: typeof profile.looking_for === 'string' ? profile.looking_for : 'everyone',
+        soul_type: typeof profile.soul_type === 'string' ? profile.soul_type : 'funny',
+        role: typeof profile.role === 'string' ? profile.role : 'chaser',
+        bio: typeof profile.bio === 'string' ? profile.bio : null,
+        agent_appearance: (profile.agent_appearance as Record<string, unknown>) || null,
+        agent_tier: 2,
       })
       .select()
       .single()

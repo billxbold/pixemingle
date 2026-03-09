@@ -6,6 +6,7 @@ import { useMatching } from '@/hooks/useMatching'
 import { useDateSync } from '@/hooks/useDateSync'
 import { useJourneyState } from '@/hooks/useJourneyState'
 import { useTheater } from '@/hooks/useTheater'
+import { useCoaching } from '@/hooks/useCoaching'
 import { Canvas } from './Canvas'
 import { DateProposalOverlay } from './DateProposalOverlay'
 import { AgentChatBar } from './AgentChatBar'
@@ -80,6 +81,9 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   const theaterMatchId = journey.state === 'THEATER' ? (journey.matchId ?? initialMatchId) : null
   const theater = useTheater(theaterMatchId, userId)
 
+  // Coaching hook — manages message history and rate limiting during theater
+  const coaching = useCoaching(theaterMatchId)
+
   // Portrait panel state — driven by theater when active, manual otherwise
   const defaultPrefs = useRef<ExpressionPreferences>(parseExpressionPreferences(''))
   const [manualChaserEmotion, setManualChaserEmotion] = useState<PortraitExpression>('neutral')
@@ -98,13 +102,21 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   const chaserSoulPrefs = isTheaterActive ? theater.chaserSoulPrefs : manualChaserSoulPrefs
   const gatekeeperSoulPrefs = isTheaterActive ? theater.gatekeeperSoulPrefs : manualGatekeeperSoulPrefs
 
-  // Derive character IDs for portraits
-  const chaserCharId = userAppearance?.premadeIndex
+  // Determine character IDs based on the current user's role
+  // The player's character is always ID 1, partner is always ID 2
+  // user_a = chaser, user_b = gatekeeper in the matching flow
+  const playerRole = journey.role ?? initialRole
+  const playerIsChaser = playerRole === 'chaser'
+
+  // Derive character IDs for portraits — map based on player role
+  const playerCharId = userAppearance?.premadeIndex
     ? `char_${String(userAppearance.premadeIndex).padStart(2, '0')}`
-    : 'char_custom_chaser'
-  const gatekeeperCharId = partnerAppearance?.premadeIndex
+    : 'char_custom_player'
+  const partnerCharId = partnerAppearance?.premadeIndex
     ? `char_${String(partnerAppearance.premadeIndex).padStart(2, '0')}`
-    : 'char_custom_gatekeeper'
+    : 'char_custom_partner'
+  const chaserCharId = playerIsChaser ? playerCharId : partnerCharId
+  const gatekeeperCharId = playerIsChaser ? partnerCharId : playerCharId
 
   /**
    * Updates portrait panel from a theater turn.
@@ -150,7 +162,9 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     if (!theater.renderingTurn || !worldStateRef.current) return
     const turn = theater.renderingTurn
     const ws = worldStateRef.current
-    const characterId = turn.agent_role === 'chaser' ? 1 : 2
+    // Map role to character ID dynamically based on player's role
+    const isPlayerTurn = turn.agent_role === playerRole
+    const characterId = isPlayerTurn ? 1 : 2
     const ch = ws.characters.get(characterId)
     if (!ch) {
       theater.onTurnRendered()
@@ -189,7 +203,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     return () => {
       if (timeoutId !== null) clearTimeout(timeoutId)
     }
-  }, [theater.renderingTurn]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [theater.renderingTurn, playerRole]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset theater completed ref when entering theater
   useEffect(() => {
@@ -204,6 +218,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     if (theaterCompletedRef.current) return
     theaterCompletedRef.current = true
     worldStateRef.current?.resetTheater()
+    coaching.clearMessages()
     if (theater.outcome === 'accepted') {
       journey.transition('POST_MATCH')
     } else if (theater.outcome === 'rejected') {
@@ -211,6 +226,13 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       transitionTo('home')
     }
   }, [theater.status, theater.outcome]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle coaching actions (agent suggestions during theater)
+  useEffect(() => {
+    if (coaching.lastAction) {
+      handleAgentResponse('', coaching.lastAction)
+    }
+  }, [coaching.lastAction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectCandidate = useCallback(async (candidate: Candidate) => {
     setSelectedCandidate(candidate)
@@ -246,6 +268,11 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     }
     if (action === 'approve' && journey.state === 'BROWSING' && selectedCandidate) {
       handleSelectCandidate(selectedCandidate)
+    }
+
+    // Log unknown actions for debugging
+    if (action && action !== 'search' && action !== 'approve') {
+      console.warn('[PixelWorld] Unknown agent action:', action)
     }
   }, [worldStateRef, playMontage, journey, search, selectedCandidate, handleSelectCandidate])
 
@@ -471,7 +498,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       />
 
       {/* Agent chat bar — always at bottom */}
-      <AgentChatBar onAgentResponse={handleAgentResponse} context={journeyContext} />
+      <AgentChatBar onAgentResponse={handleAgentResponse} context={journeyContext} matchId={journey.state === 'THEATER' ? (journey.matchId ?? initialMatchId) : null} />
 
       {/* Dev toolbar */}
       <DevToolbar

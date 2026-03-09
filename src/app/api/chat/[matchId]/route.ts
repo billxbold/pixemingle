@@ -1,14 +1,24 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, checkEndpointRateLimit } from '@/lib/rate-limit';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ matchId: string }> }
 ) {
   const { matchId } = await params;
+  if (!UUID_RE.test(matchId)) {
+    return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
+  }
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'chat-get', 30, 60);
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
 
   const db = createServiceClient();
 
@@ -37,6 +47,9 @@ export async function POST(
   { params }: { params: Promise<{ matchId: string }> }
 ) {
   const { matchId } = await params;
+  if (!UUID_RE.test(matchId)) {
+    return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
+  }
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

@@ -46,6 +46,9 @@ export async function POST(
 
   // Gateway can specify user_id in body
   if (isGateway && body.user_id && typeof body.user_id === 'string') {
+    if (!UUID_RE.test(body.user_id)) {
+      return NextResponse.json({ error: 'Invalid user_id format' }, { status: 400 })
+    }
     userId = body.user_id
   }
   if (!userId) {
@@ -148,7 +151,7 @@ export async function POST(
     comedy_intent: 'physical' as const,
     target: null,
     prop: null,
-    brain_reasoning: `Entrance: ${vehicle} with ${complication}, recovery: ${recovery}`,
+    brain_reasoning: isGateway ? `Entrance: ${vehicle} with ${complication}, recovery: ${recovery}` : null,
   }
 
   const { data: insertedTurn, error: insertErr } = await db

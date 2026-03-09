@@ -45,7 +45,10 @@ export async function POST() {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('Failed to create demo match:', error.message)
+    return NextResponse.json({ error: 'Failed to create demo match' }, { status: 500 })
+  }
 
   return NextResponse.json({
     matchId: match.id,

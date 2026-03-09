@@ -1,9 +1,15 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
 export async function GET() {
   const userId = await getAuthUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'journey-state', 30, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
 
   const db = createServiceClient()
 
@@ -23,7 +29,7 @@ export async function GET() {
   const isChaser = m.user_a_id === userId
   const role = isChaser ? 'chaser' : 'gatekeeper'
 
-  // Check theater status from match columns (no scenario_cache)
+  // Check theater status from match columns
   const theaterStatus = m.theater_status as string | null
   const proposedVenue = m.proposed_venue as string | null
   const finalVenue = m.final_venue as string | null

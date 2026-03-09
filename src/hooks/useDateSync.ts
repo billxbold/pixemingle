@@ -5,8 +5,7 @@ import { createClient } from '@/lib/supabase';
 
 /**
  * Real-time date proposal sync via Supabase broadcast channel.
- * Extracted from the deprecated useScenario hook — handles only
- * date proposal/venue response broadcasting (no scenario logic).
+ * Handles date proposal/venue response broadcasting.
  */
 // Module-scope singleton — avoids infinite re-subscribe loops from
 // createClient() producing a new reference on every render.

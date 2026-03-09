@@ -17,7 +17,13 @@ export async function POST(request: Request) {
   try {
     const db = createServiceClient()
 
-    const { candidate_id, score, reasons } = await request.json()
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+    const { candidate_id, score, reasons } = body as { candidate_id?: string; score?: number; reasons?: unknown }
     if (!candidate_id) return NextResponse.json({ error: 'Missing candidate_id' }, { status: 400 })
     if (!UUID_REGEX.test(candidate_id)) {
       return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })

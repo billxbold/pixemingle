@@ -18,11 +18,11 @@ export interface RecoveredProposal {
 }
 
 const VALID_TRANSITIONS: Record<JourneyState, JourneyState[]> = {
-  HOME_IDLE: ['RESEARCHING'],
+  HOME_IDLE: ['RESEARCHING', 'THEATER'],
   RESEARCHING: ['BROWSING'],
   BROWSING: ['PROPOSING', 'HOME_IDLE'],
   PROPOSING: ['WAITING'],
-  WAITING: ['THEATER', 'HOME_IDLE'],
+  WAITING: ['THEATER', 'HOME_IDLE', 'PROPOSING'],
   THEATER: ['POST_MATCH', 'HOME_IDLE'],
   POST_MATCH: ['HOME_IDLE'],
 }
@@ -57,6 +57,9 @@ export function useJourneyState() {
         if (!res.ok) return
         const data = await res.json()
         if (cancelled || !data.matchId) return
+
+        const VALID_STATES: JourneyState[] = ['HOME_IDLE', 'RESEARCHING', 'BROWSING', 'PROPOSING', 'WAITING', 'THEATER', 'POST_MATCH']
+        if (!VALID_STATES.includes(data.state as JourneyState)) return
 
         setState(data.state as JourneyState)
         setMatchId(data.matchId)

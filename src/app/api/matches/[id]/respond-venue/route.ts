@@ -1,16 +1,27 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 import type { VenueName } from '@/types/database'
 
 const VALID_VENUES: VenueName[] = ['lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum']
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: matchId } = await params
+  if (!UUID_RE.test(matchId)) {
+    return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 })
+  }
+
   const userId = await getAuthUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'respond-venue', 10, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
 
   const db = createServiceClient()
 
@@ -31,7 +42,7 @@ export async function POST(
   // Verify user is gatekeeper (user_b) and match is active or pending
   const { data: match } = await db
     .from('matches')
-    .select('*')
+    .select('id, user_a_id, user_b_id, status, proposed_venue, final_venue, attempt_count')
     .eq('id', matchId)
     .eq('user_b_id', userId)
     .in('status', ['active', 'pending_b'])
@@ -39,34 +50,35 @@ export async function POST(
 
   if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
 
-  const m = match as Record<string, unknown>
-  const cache = m.scenario_cache as Record<string, unknown> | null
-  const proposal = cache?.proposal as Record<string, unknown> | undefined
-  const proposedVenue = proposal?.venue as string | undefined
-  if (!proposedVenue) {
+  // Check that there is an active venue proposal
+  if (!match.proposed_venue) {
     return NextResponse.json({ error: 'No venue proposal to respond to' }, { status: 400 })
   }
 
   if (action === 'accept') {
     await db.from('matches').update({
-      scenario_cache: { ...cache, proposal: { ...proposal, response: 'accepted' } },
+      final_venue: match.proposed_venue,
+      status: 'active',
       updated_at: new Date().toISOString(),
     }).eq('id', matchId)
 
-    return NextResponse.json({ status: 'accepted', venue: proposedVenue })
+    return NextResponse.json({ status: 'accepted', venue: match.proposed_venue })
   }
 
   if (action === 'counter') {
+    // Update proposed_venue to the counter venue so chaser can see it
     await db.from('matches').update({
-      scenario_cache: { ...cache, proposal: { ...proposal, response: 'countered', chosen: venue } },
+      proposed_venue: venue,
+      final_venue: venue,
+      status: 'active',
       updated_at: new Date().toISOString(),
     }).eq('id', matchId)
 
-    return NextResponse.json({ status: 'countered', original: proposedVenue, chosen: venue })
+    return NextResponse.json({ status: 'countered', original: match.proposed_venue, chosen: venue })
   }
 
   // Decline — check attempt count for permanent rejection
-  const attemptCount = ((m.attempt_count as number) ?? 0) + 1
+  const attemptCount = ((match.attempt_count as number) ?? 0) + 1
 
   if (attemptCount >= 3) {
     // 3rd decline — permanently reject the match
@@ -78,18 +90,17 @@ export async function POST(
     await db.from('matches').update({
       status: 'rejected',
       attempt_count: attemptCount,
-      scenario_cache: { ...cache, proposal: { ...proposal, response: 'declined' } },
+      proposed_venue: null,
       updated_at: new Date().toISOString(),
     }).eq('id', matchId)
 
     return NextResponse.json({ status: 'declined', permanent: true, ...rejectionTexts })
   }
 
-  // Not yet 3rd decline — reset so chaser can re-propose
+  // Not yet 3rd decline — clear proposed_venue so chaser can re-propose
   await db.from('matches').update({
     proposed_venue: null,
     attempt_count: attemptCount,
-    scenario_cache: { ...cache, proposal: { ...proposal, response: 'declined' } },
     updated_at: new Date().toISOString(),
   }).eq('id', matchId)
 

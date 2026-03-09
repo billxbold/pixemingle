@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 import type { ChatMessage } from '@/types/database';
 
+// Module-scope client to prevent infinite subscribe loops (same pattern as useNotifications, useTheater, useDateSync)
+const supabase = createClient();
+
 export function useChat(matchId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +29,6 @@ export function useChat(matchId: string | null) {
     setIsLoading(true);
     fetchMessages().finally(() => setIsLoading(false));
 
-    const supabase = createClient();
     const channel = supabase
       .channel(`chat:${matchId}`)
       .on('postgres_changes', {

@@ -11,9 +11,10 @@ interface AgentMessage {
 interface AgentChatBarProps {
   onAgentResponse: (text: string, action: string | null) => void
   context?: string
+  matchId?: string | null
 }
 
-export function AgentChatBar({ onAgentResponse, context }: AgentChatBarProps) {
+export function AgentChatBar({ onAgentResponse, context, matchId }: AgentChatBarProps) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -34,18 +35,22 @@ export function AgentChatBar({ onAgentResponse, context }: AgentChatBarProps) {
       const res = await fetch('/api/agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, context }),
+        body: JSON.stringify({ message: userMsg, context, ...(matchId ? { match_id: matchId } : {}) }),
       })
+      if (!res.ok) {
+        setMessages(prev => [...prev, { role: 'agent', text: 'Hmm, something went wrong...', timestamp: Date.now() }])
+        return
+      }
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'agent', text: data.text, timestamp: Date.now() }])
-      onAgentResponse(data.text, data.action)
+      setMessages(prev => [...prev, { role: 'agent', text: data.text ?? 'Hmm...', timestamp: Date.now() }])
+      onAgentResponse(data.text ?? 'Hmm...', data.action ?? null)
     } catch {
       setMessages(prev => [...prev, { role: 'agent', text: 'Oops, my pixel brain glitched...', timestamp: Date.now() }])
     } finally {
       setSending(false)
       setTimeout(() => logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' }), 50)
     }
-  }, [input, sending, context, onAgentResponse])
+  }, [input, sending, context, matchId, onAgentResponse])
 
   return (
     <div className="relative z-40 shrink-0">

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextRequest, NextResponse } from 'next/server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 import type { TheaterTurn, TheaterState, VenueName } from '@/types/database'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -45,6 +46,11 @@ export async function GET(
     userId = await getAuthUserId()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CACHE_HEADERS })
+    }
+
+    const rateLimitResult = checkEndpointRateLimit(userId, 'theater-state', 30, 60)
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: CACHE_HEADERS })
     }
   }
 

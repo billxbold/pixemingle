@@ -3,11 +3,17 @@ import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { generateSoulMd } from '@/lib/soulMdGenerator'
 import type { SoulMdGeneratorInput } from '@/lib/soulMdGenerator'
 import type { PersonalityAnswers } from '@/types/database'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   const userId = await getAuthUserId()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'generate_soul', 5, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
   let body: Record<string, unknown>

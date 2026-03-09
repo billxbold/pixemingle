@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
 export async function PUT(request: Request) {
   try {
@@ -25,8 +26,19 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
+    const rateLimitResult = checkEndpointRateLimit(agent.id, 'webhook-config-put', 20, 60)
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
+
     // Update webhook URL
-    const { webhook_url } = await request.json()
+    let reqBody: Record<string, unknown>
+    try {
+      reqBody = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+    const { webhook_url } = reqBody as { webhook_url?: string }
     if (!webhook_url || typeof webhook_url !== 'string') {
       return NextResponse.json({ error: 'Missing webhook_url' }, { status: 400 })
     }
@@ -34,8 +46,8 @@ export async function PUT(request: Request) {
     // Validate webhook_url
     try {
       const parsed = new URL(webhook_url)
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        return NextResponse.json({ error: 'webhook_url must use http or https' }, { status: 400 })
+      if (parsed.protocol !== 'https:') {
+        return NextResponse.json({ error: 'webhook_url must use https' }, { status: 400 })
       }
       // Block private IPs
       const host = parsed.hostname

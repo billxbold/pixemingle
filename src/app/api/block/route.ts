@@ -1,11 +1,17 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
+import { checkEndpointRateLimit } from '@/lib/rate-limit';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'block', 10, 60);
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
 
   let body: Record<string, unknown>;
   try {

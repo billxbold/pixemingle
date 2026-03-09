@@ -1,21 +1,37 @@
 import { createServiceClient, getAuthUserId } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 import type { VenueName } from '@/types/database'
 import { VENUE_INFO } from '@/types/database'
 
 const VALID_VENUES: VenueName[] = ['lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum']
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: matchId } = await params
+  if (!UUID_RE.test(matchId)) {
+    return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 })
+  }
   const userId = await getAuthUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const rateLimitResult = checkEndpointRateLimit(userId, 'propose-date', 10, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   try {
-    const { venue } = await request.json()
-    if (!venue || !VALID_VENUES.includes(venue)) {
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+    const { venue } = body as { venue?: string }
+    if (!venue || !VALID_VENUES.includes(venue as VenueName)) {
       return NextResponse.json({ error: 'Invalid venue' }, { status: 400 })
     }
 
