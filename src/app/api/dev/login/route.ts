@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 const TEST_USERS = {
   alex: {
     email: 'alex-dev@pixemingle.test',
-    password: 'dev-alex-pixemingle-2026',
+    password: process.env.DEV_USER_PASSWORD_1 || 'dev-password-change-me',
     profile: {
       name: 'Alex',
       age: 27,
@@ -30,7 +30,7 @@ const TEST_USERS = {
   },
   maya: {
     email: 'maya-dev@pixemingle.test',
-    password: 'dev-maya-pixemingle-2026',
+    password: process.env.DEV_USER_PASSWORD_2 || 'dev-password-change-me',
     profile: {
       name: 'Maya',
       age: 25,
@@ -111,6 +111,7 @@ export async function GET(request: Request) {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
+    secure: false, // dev-only route, never runs in production
     maxAge: 60 * 60 * 24,
   })
   return response

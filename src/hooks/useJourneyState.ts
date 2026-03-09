@@ -17,6 +17,16 @@ export interface RecoveredProposal {
   inviteText: string
 }
 
+const VALID_TRANSITIONS: Record<JourneyState, JourneyState[]> = {
+  HOME_IDLE: ['RESEARCHING'],
+  RESEARCHING: ['BROWSING'],
+  BROWSING: ['PROPOSING', 'HOME_IDLE'],
+  PROPOSING: ['WAITING'],
+  WAITING: ['THEATER', 'HOME_IDLE'],
+  THEATER: ['POST_MATCH', 'HOME_IDLE'],
+  POST_MATCH: ['HOME_IDLE'],
+}
+
 export function useJourneyState() {
   const [state, setState] = useState<JourneyState>('HOME_IDLE')
   const [matchId, setMatchId] = useState<string | null>(null)
@@ -25,7 +35,14 @@ export function useJourneyState() {
   const [recoveredVenue, setRecoveredVenue] = useState<string | null>(null)
 
   const transition = useCallback((to: JourneyState, meta?: { matchId?: string; role?: 'chaser' | 'gatekeeper' }) => {
-    setState(to)
+    setState((current) => {
+      const allowed = VALID_TRANSITIONS[current]
+      if (!allowed.includes(to)) {
+        console.warn(`[JourneyState] Invalid transition: ${current} → ${to}. Allowed: ${allowed.join(', ')}`)
+        return current
+      }
+      return to
+    })
     if (meta?.matchId !== undefined) setMatchId(meta.matchId)
     if (meta?.role !== undefined) setRole(meta.role)
   }, [])

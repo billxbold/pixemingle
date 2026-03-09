@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-export default function DevLoginPage() {
+function DevLoginContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState('Preparing...')
 
@@ -25,5 +25,17 @@ export default function DevLoginPage() {
         <p className="text-gray-400 font-mono text-sm">{status}</p>
       </div>
     </div>
+  )
+}
+
+export default function DevLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-4xl animate-pulse">🕹️</div>
+      </div>
+    }>
+      <DevLoginContent />
+    </Suspense>
   )
 }

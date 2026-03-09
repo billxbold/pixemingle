@@ -142,7 +142,45 @@ export interface OfficeLayout {
   tileColors?: Array<FloorColor | null>
 }
 
+/** @deprecated v1 emotion type — used by the character FSM (CharacterState).
+ *  For v2 OpenClaw theater, use `EmotionState` from `@/types/database` via the `activeEmotion` field on Character. */
 export type Emotion = 'neutral' | 'happy' | 'sad' | 'angry' | 'nervous' | 'excited' | 'bored' | 'irritated'
+
+// v2 body modifiers — driven by SOUL.md Expression Preferences
+export type BodyModifier =
+  // Posture
+  | 'lean_forward' | 'lean_back' | 'lean_back_arms_crossed' | 'casual_lean'
+  | 'stiff_pose' | 'slump' | 'slump_heavy' | 'open_posture' | 'puff_chest'
+  // Hands/Arms
+  | 'arms_crossed' | 'arms_crossed_smirk' | 'hands_in_pockets' | 'rub_back_of_neck'
+  | 'cover_face_peek' | 'hand_on_hip' | 'chin_touch' | 'over_gesticulate' | 'finger_guns'
+  // Head
+  | 'slight_nod' | 'head_tilt' | 'look_away' | 'look_away_smile' | 'blush_look_away'
+  | 'eyebrow_raise' | 'slow_blink' | 'deadpan_stare'
+  // Full Body
+  | 'slight_bounce' | 'slight_fidget' | 'slight_shift' | 'slight_wave' | 'shrink_slightly'
+  | 'fist_pump' | 'hair_flip' | 'shrug_smile' | 'cover_mouth_laugh' | 'tap_foot'
+  | 'determined_face' | 'relaxed_smile'
+  // Special
+  | 'none';
+
+// v2 portrait expressions — 128x128 HTML overlay panel
+export type PortraitExpression =
+  | 'neutral' | 'genuine_smile' | 'shy_smile' | 'smug_grin'
+  | 'heart_eyes' | 'starry_eyed' | 'laughing' | 'cringe'
+  | 'shock' | 'deadpan' | 'crying' | 'angry'
+  | 'disgusted' | 'thinking' | 'nervous' | 'determined';
+
+// v2 expanded particle types
+export type ParticleType =
+  // Existing
+  | 'heart' | 'confetti' | 'rain' | 'sweat' | 'lightbulb' | 'star' | 'music_note'
+  // New
+  | 'blush_tint' | 'blush_gradient' | 'slight_blush'
+  | 'single_sweat_drop' | 'sweat_fountain'
+  | 'small_sparkle' | 'small_star'
+  | 'question_mark' | 'anger' | 'rain_cloud_personal'
+  | 'tumbleweed' | 'tears';
 
 export interface Character {
   id: number
@@ -181,4 +219,9 @@ export interface Character {
   speechText: string | null
   speechTimer: number
   onStateComplete: (() => void) | null
+  // v2 OpenClaw theater fields
+  gender?: 'male' | 'female' | 'nonbinary'
+  theaterRole?: 'chaser' | 'gatekeeper'
+  activeBodyModifier?: BodyModifier
+  activeEmotion?: import('@/types/database').EmotionState
 }

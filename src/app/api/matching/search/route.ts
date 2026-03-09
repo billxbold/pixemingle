@@ -1,10 +1,17 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { findCandidates } from '@/lib/matching'
 import { NextResponse } from 'next/server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
+import type { User } from '@/types/database'
 
 export async function POST() {
   const userId = await getAuthUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimitResult = checkEndpointRateLimit(userId, 'matching_search', 30, 60)
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
 
   const db = createServiceClient()
 
@@ -17,13 +24,21 @@ export async function POST() {
 
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  // Get blocked user IDs
-  const { data: blocks } = await db
+  // Get blocked user IDs — both directions (users I blocked + users who blocked me)
+  const { data: blocksOutgoing } = await db
     .from('blocks')
     .select('blocked_id')
     .eq('blocker_id', userId)
 
-  const blockedIds = (blocks || []).map((b: { blocked_id: string }) => b.blocked_id)
+  const { data: blocksIncoming } = await db
+    .from('blocks')
+    .select('blocker_id')
+    .eq('blocked_id', userId)
+
+  const blockedIds = [
+    ...(blocksOutgoing || []).map((b: { blocked_id: string }) => b.blocked_id),
+    ...(blocksIncoming || []).map((b: { blocker_id: string }) => b.blocker_id),
+  ]
 
   // Get existing match partner IDs to exclude
   const { data: existingMatches } = await db
@@ -43,7 +58,7 @@ export async function POST() {
     .select('*')
     .neq('id', userId)
 
-  const candidates = findCandidates(profile, allUsers || [], excludeIds)
+  const candidates = findCandidates(profile as User, (allUsers || []) as User[], excludeIds)
 
   return NextResponse.json({ candidates })
 }

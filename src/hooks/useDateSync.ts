@@ -2,16 +2,21 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase';
-import type { FlirtScenario } from '@/types/database';
 
-export function useScenario(
+/**
+ * Real-time date proposal sync via Supabase broadcast channel.
+ * Extracted from the deprecated useScenario hook — handles only
+ * date proposal/venue response broadcasting (no scenario logic).
+ */
+// Module-scope singleton — avoids infinite re-subscribe loops from
+// createClient() producing a new reference on every render.
+const supabase = createClient();
+
+export function useDateSync(
   matchId: string | null,
   role: 'chaser' | 'gatekeeper',
   initialProposal?: { dateStatus: 'proposed'; venue: string; inviteText: string } | null,
 ) {
-  const [scenario, setScenario] = useState<FlirtScenario | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [venueProposal, setVenueProposal] = useState<{ venue: string; text: string } | null>(
     initialProposal ? { venue: initialProposal.venue, text: initialProposal.inviteText } : null,
   );
@@ -19,10 +24,6 @@ export function useScenario(
     initialProposal ? 'proposed' : 'pending',
   );
   const [reactionData, setReactionData] = useState<Record<string, string> | null>(null);
-  const [nudgeShown, setNudgeShown] = useState(false);
-  const [rolesFlipped, setRolesFlipped] = useState(false);
-  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const supabase = createClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Hydrate from recovered proposal (arrives async after page load)
@@ -33,22 +34,13 @@ export function useScenario(
     }
   }, [initialProposal]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Subscribe to match channel for real-time sync
+  // Subscribe to match channel for real-time date proposal sync
   useEffect(() => {
     if (!matchId) return;
 
     const channel = supabase.channel(`match:${matchId}`);
 
     channel
-      .on('broadcast', { event: 'scenario_ready' }, ({ payload }) => {
-        setScenario(payload.scenario);
-      })
-      .on('broadcast', { event: 'step' }, ({ payload }) => {
-        // Gatekeeper follows chaser's step advancement
-        if (role === 'gatekeeper') {
-          setCurrentStep(payload.step_index);
-        }
-      })
       .on('broadcast', { event: 'date_proposed' }, ({ payload }) => {
         setVenueProposal(payload as { venue: string; text: string });
         setDateStatus('proposed');
@@ -65,9 +57,6 @@ export function useScenario(
         setDateStatus('declined');
         setReactionData(payload as Record<string, string>);
       })
-      .on('broadcast', { event: 'roles_flipped' }, () => {
-        setRolesFlipped(true);
-      })
       .subscribe();
 
     channelRef.current = channel;
@@ -75,7 +64,7 @@ export function useScenario(
     return () => {
       channel.unsubscribe();
     };
-  }, [matchId, role, supabase]);
+  }, [matchId, role]);
 
   // Handle match expiry / status changes
   useEffect(() => {
@@ -96,88 +85,9 @@ export function useScenario(
       .subscribe();
 
     return () => { channel.unsubscribe(); };
-  }, [matchId, supabase]);
-
-  // Chaser broadcasts step advancement
-  const advanceStep = useCallback(
-    (stepIndex: number) => {
-      if (role !== 'chaser' || !channelRef.current) return;
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'step',
-        payload: { step_index: stepIndex },
-      });
-      setCurrentStep(stepIndex);
-    },
-    [role]
-  );
-
-  const generate = useCallback(async () => {
-    if (!matchId) return;
-    setIsGenerating(true);
-    try {
-      const res = await fetch(`/api/scenarios/${matchId}/generate`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (data.error) {
-        console.error('Generation error:', data.error);
-        return;
-      }
-      setScenario(data.scenario);
-
-      // Broadcast to gatekeeper
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'scenario_ready',
-          payload: { scenario: data.scenario },
-        });
-      }
-    } finally {
-      setIsGenerating(false);
-    }
   }, [matchId]);
-
-  const submitResult = useCallback(
-    async (result: 'accepted' | 'rejected') => {
-      if (!matchId) return;
-      await fetch(`/api/scenarios/${matchId}/result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ result }),
-      });
-    },
-    [matchId]
-  );
-
-  const fetchCached = useCallback(async () => {
-    if (!matchId) return;
-    const res = await fetch(`/api/scenarios/${matchId}`);
-    const data = await res.json();
-    if (data.scenario) setScenario(data.scenario);
-  }, [matchId]);
-
-  // Gatekeeper nudge timer — show nudge after 30s of waiting
-  useEffect(() => {
-    if (role !== 'gatekeeper' || dateStatus !== 'pending') return;
-    nudgeTimerRef.current = setTimeout(() => setNudgeShown(true), 30000);
-    return () => {
-      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
-    };
-  }, [role, dateStatus]);
-
-  const flipRoles = useCallback(() => {
-    setRolesFlipped(true);
-    channelRef.current?.send({
-      type: 'broadcast',
-      event: 'roles_flipped',
-      payload: { new_chaser: 'gatekeeper', new_gatekeeper: 'chaser' },
-    });
-  }, []);
 
   const broadcastDateProposal = useCallback((venue: string, text: string) => {
-    // Set local state immediately (broadcast doesn't deliver to sender)
     setVenueProposal({ venue, text });
     setDateStatus('proposed');
     channelRef.current?.send({
@@ -186,7 +96,6 @@ export function useScenario(
   }, []);
 
   const broadcastVenueResponse = useCallback((event: string, payload: Record<string, unknown>) => {
-    // Set local state immediately (broadcast doesn't deliver to sender)
     if (event === 'venue_accepted') {
       setDateStatus('accepted');
       setReactionData(payload as Record<string, string>);
@@ -201,20 +110,10 @@ export function useScenario(
   }, []);
 
   return {
-    scenario,
-    currentStep,
-    isGenerating,
-    generate,
-    fetchCached,
-    advanceStep,
-    submitResult,
     venueProposal,
     dateStatus,
     reactionData,
     broadcastDateProposal,
     broadcastVenueResponse,
-    nudgeShown,
-    rolesFlipped,
-    flipRoles,
   };
 }

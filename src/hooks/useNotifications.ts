@@ -17,15 +17,25 @@ const NOTIFICATION_COPY: Record<Notification['type'], string> = {
   match_expired: 'A match timed out... your agent is crying',
   match_result: 'The theater results are in!',
   date_proposal: 'Someone wants to take you on a date!',
+  date_proposal_sent: 'Your date proposal was sent!',
   venue_accepted: 'They said yes to the date spot!',
   venue_countered: 'They picked a different spot — check it out!',
   date_declined: 'They passed on the date... your agent is bummed',
+  theater_turn: 'Your agent just made a move!',
+  theater_entrance: 'The entrance is happening — watch now!',
+  theater_outcome: 'The theater results are in!',
+  agent_coaching_response: 'Your agent heard your coaching!',
+  heartbeat_suggestion: 'Your agent has a suggestion for you!',
 };
+
+// Module-scope singleton — Supabase browser clients are singletons internally,
+// but calling createClient() per render creates a new reference each time,
+// which triggers infinite re-execution when used in dependency arrays.
+const supabase = createClient();
 
 export function useNotifications(userId: string | null) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const supabase = createClient();
   const pushInitialized = useRef(false);
 
   // Request push permission + register service worker once on mount
@@ -96,7 +106,7 @@ export function useNotifications(userId: string | null) {
     return () => {
       channel.unsubscribe();
     };
-  }, [userId, supabase]);
+  }, [userId]);
 
   const markAsRead = useCallback(
     async (notificationId: string) => {
@@ -110,7 +120,7 @@ export function useNotifications(userId: string | null) {
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     },
-    [supabase]
+    []
   );
 
   const markAllAsRead = useCallback(async () => {
@@ -123,7 +133,7 @@ export function useNotifications(userId: string | null) {
 
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnreadCount(0);
-  }, [userId, supabase]);
+  }, [userId]);
 
   const latest = notifications[0] ?? null;
 

@@ -1,6 +1,5 @@
 import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
-import { generateRejectionTexts } from '@/lib/llm'
 import type { VenueName } from '@/types/database'
 
 const VALID_VENUES: VenueName[] = ['lounge', 'gallery', 'japanese', 'icecream', 'studio', 'museum']
@@ -15,11 +14,17 @@ export async function POST(
 
   const db = createServiceClient()
 
-  const { action, venue } = await request.json()
-  if (!['accept', 'counter', 'decline'].includes(action)) {
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  const { action, venue } = body as { action?: string; venue?: string }
+  if (!action || !['accept', 'counter', 'decline'].includes(action)) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
-  if (action === 'counter' && (!venue || !VALID_VENUES.includes(venue))) {
+  if (action === 'counter' && (!venue || !VALID_VENUES.includes(venue as VenueName))) {
     return NextResponse.json({ error: 'Invalid venue for counter' }, { status: 400 })
   }
 
@@ -37,10 +42,12 @@ export async function POST(
   const m = match as Record<string, unknown>
   const cache = m.scenario_cache as Record<string, unknown> | null
   const proposal = cache?.proposal as Record<string, unknown> | undefined
-  const proposedVenue = proposal?.venue as string ?? 'lounge'
+  const proposedVenue = proposal?.venue as string | undefined
+  if (!proposedVenue) {
+    return NextResponse.json({ error: 'No venue proposal to respond to' }, { status: 400 })
+  }
 
   if (action === 'accept') {
-    // Store acceptance in scenario_cache
     await db.from('matches').update({
       scenario_cache: { ...cache, proposal: { ...proposal, response: 'accepted' } },
       updated_at: new Date().toISOString(),
@@ -58,24 +65,33 @@ export async function POST(
     return NextResponse.json({ status: 'countered', original: proposedVenue, chosen: venue })
   }
 
-  // Decline
-  const [chaserProfile, gatekeeperProfile] = await Promise.all([
-    db.from('users').select('*').eq('id', m.user_a_id as string).single(),
-    db.from('users').select('*').eq('id', userId).single(),
-  ])
+  // Decline — check attempt count for permanent rejection
+  const attemptCount = ((m.attempt_count as number) ?? 0) + 1
 
-  let rejectionTexts = { rejection_text: "I'd rather not.", walkoff_text: "Back to swiping..." }
-  if (chaserProfile.data && gatekeeperProfile.data) {
-    rejectionTexts = await generateRejectionTexts(
-      chaserProfile.data, gatekeeperProfile.data, proposedVenue as VenueName
-    )
+  if (attemptCount >= 3) {
+    // 3rd decline — permanently reject the match
+    const rejectionTexts = {
+      rejection_text: "I'd rather not, thanks.",
+      walkoff_text: "Back to swiping...",
+    }
+
+    await db.from('matches').update({
+      status: 'rejected',
+      attempt_count: attemptCount,
+      scenario_cache: { ...cache, proposal: { ...proposal, response: 'declined' } },
+      updated_at: new Date().toISOString(),
+    }).eq('id', matchId)
+
+    return NextResponse.json({ status: 'declined', permanent: true, ...rejectionTexts })
   }
 
+  // Not yet 3rd decline — reset so chaser can re-propose
   await db.from('matches').update({
-    status: 'rejected',
+    proposed_venue: null,
+    attempt_count: attemptCount,
     scenario_cache: { ...cache, proposal: { ...proposal, response: 'declined' } },
     updated_at: new Date().toISOString(),
   }).eq('id', matchId)
 
-  return NextResponse.json({ status: 'declined', ...rejectionTexts })
+  return NextResponse.json({ status: 'declined', permanent: false, attempts_remaining: 3 - attemptCount })
 }

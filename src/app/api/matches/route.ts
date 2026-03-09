@@ -15,7 +15,10 @@ export async function GET() {
     .in('status', ['active', 'pending_b'])
     .order('updated_at', { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Failed to fetch matches:', error.message);
+    return NextResponse.json({ error: 'An error occurred' }, { status: 500 });
+  }
 
   const annotated = (matches || []).map((match) => {
     const isUserA = match.user_a_id === userId;

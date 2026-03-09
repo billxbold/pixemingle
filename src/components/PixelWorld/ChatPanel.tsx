@@ -103,6 +103,7 @@ export function ChatPanel({
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
           maxLength={500}
+          aria-label="Chat message"
           className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-white placeholder:text-gray-500 focus:outline-none focus:border-pink-500"
         />
         <button

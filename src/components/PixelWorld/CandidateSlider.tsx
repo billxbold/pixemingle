@@ -14,6 +14,9 @@ export function CandidateSlider({ candidates, onSelect, onPass, onAgentComment }
   const [index, setIndex] = useState(0)
   const current = candidates[index]
 
+  const onAgentCommentRef = useRef(onAgentComment)
+  onAgentCommentRef.current = onAgentComment
+
   useEffect(() => {
     if (!current) return
     const { reasons, score } = current
@@ -24,8 +27,8 @@ export function CandidateSlider({ candidates, onSelect, onPass, onAgentComment }
       reasons.shared.length > 0 ? `You both like: ${reasons.shared.join(', ')}` : null,
     ].filter(Boolean)
     const comment = comments[Math.floor(Math.random() * comments.length)] || `${score}% compatible!`
-    onAgentComment(comment as string)
-  }, [index, current, onAgentComment])
+    onAgentCommentRef.current(comment as string)
+  }, [index, current])
 
   const next = useCallback(() => {
     if (index < candidates.length - 1) {
@@ -80,6 +83,7 @@ export function CandidateSlider({ candidates, onSelect, onPass, onAgentComment }
         onClick={prev}
         disabled={index === 0}
         className="bg-gray-800/80 text-white w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 hover:bg-gray-700"
+        aria-label="Previous candidate"
       >
         &lt;
       </button>
@@ -104,6 +108,7 @@ export function CandidateSlider({ candidates, onSelect, onPass, onAgentComment }
         onClick={next}
         disabled={index === candidates.length - 1}
         className="bg-gray-800/80 text-white w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 hover:bg-gray-700"
+        aria-label="Next candidate"
       >
         &gt;
       </button>

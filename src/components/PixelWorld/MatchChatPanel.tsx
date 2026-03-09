@@ -42,7 +42,7 @@ export function MatchChatPanel({
           <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm">?</div>
         )}
         <span className="font-bold text-blue-300 flex-1">{partnerName}</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+        <button onClick={onClose} className="text-gray-400 hover:text-white text-xl" aria-label="Close chat">&times;</button>
       </div>
 
       {/* Messages */}
@@ -69,6 +69,7 @@ export function MatchChatPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Message..."
+          aria-label="Chat message"
           className="flex-1 bg-gray-800 text-white text-sm font-mono rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
         />
         <button

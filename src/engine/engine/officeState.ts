@@ -16,6 +16,9 @@ import {
 import type { Character, Seat, FurnitureInstance, TileType as TileTypeVal, OfficeLayout, PlacedFurniture } from '../types'
 import { createCharacter, updateCharacter } from './characters'
 import { matrixEffectSeeds } from './matrixEffect'
+import { AtomPlayer } from '../atomPlayer'
+import { CameraSystem } from '../cameraSystem'
+import type { ParticleSystem } from '../particles'
 import { isWalkable, getWalkableTiles, findPath } from '../layout/tileMap'
 import {
   createDefaultLayout,
@@ -38,6 +41,11 @@ export class WorldState {
   cameraFollowId: number | null = null
   hoveredAgentId: number | null = null
   hoveredTile: { col: number; row: number } | null = null
+
+  // Comedy atom system
+  atomPlayers: Map<number, AtomPlayer> = new Map()
+  cameraSystem: CameraSystem = new CameraSystem()
+  private particleSystemRef: ParticleSystem | null = null
 
   constructor(layout?: OfficeLayout) {
     this.layout = layout || createDefaultLayout()
@@ -398,6 +406,36 @@ export class WorldState {
     }
   }
 
+  /** Connect particle system for atom triggers */
+  setParticleSystem(ps: ParticleSystem): void {
+    this.particleSystemRef = ps
+  }
+
+  /** Get or create an AtomPlayer for a character */
+  getAtomPlayer(characterId: number): AtomPlayer {
+    let player = this.atomPlayers.get(characterId)
+    if (!player) {
+      player = new AtomPlayer()
+      this.atomPlayers.set(characterId, player)
+    }
+    return player
+  }
+
+  /** Play comedy atoms on a character */
+  playAtoms(characterId: number, atomIds: string[], onComplete?: () => void): void {
+    if (!this.particleSystemRef && process.env.NODE_ENV === 'development') {
+      console.warn('[WorldState.playAtoms] particleSystemRef is null — atom particles will not fire. Call setParticleSystem() first.')
+    }
+    const player = this.getAtomPlayer(characterId)
+    player.playSequence(atomIds, onComplete)
+  }
+
+  /** Check if a character is playing atoms */
+  isPlayingAtoms(characterId: number): boolean {
+    const player = this.atomPlayers.get(characterId)
+    return player?.isPlaying() ?? false
+  }
+
   update(dt: number): void {
     const toDelete: number[] = []
     for (const ch of this.characters.values()) {
@@ -429,7 +467,19 @@ export class WorldState {
     }
     for (const id of toDelete) {
       this.characters.delete(id)
+      this.atomPlayers.delete(id)
     }
+
+    // Update atom players for all characters with active atoms
+    for (const [charId, player] of this.atomPlayers) {
+      if (!player.isPlaying()) continue
+      const ch = this.characters.get(charId)
+      if (!ch) continue
+      player.update(dt, ch, this.particleSystemRef ?? undefined, this.cameraSystem)
+    }
+
+    // Update camera system
+    this.cameraSystem.update(dt)
   }
 
   getCharacters(): Character[] {

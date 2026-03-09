@@ -27,8 +27,23 @@ export async function PUT(request: Request) {
 
     // Update webhook URL
     const { webhook_url } = await request.json()
-    if (!webhook_url) {
+    if (!webhook_url || typeof webhook_url !== 'string') {
       return NextResponse.json({ error: 'Missing webhook_url' }, { status: 400 })
+    }
+
+    // Validate webhook_url
+    try {
+      const parsed = new URL(webhook_url)
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return NextResponse.json({ error: 'webhook_url must use http or https' }, { status: 400 })
+      }
+      // Block private IPs
+      const host = parsed.hostname
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.startsWith('10.') || host.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+        return NextResponse.json({ error: 'webhook_url cannot point to private networks' }, { status: 400 })
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid webhook_url' }, { status: 400 })
     }
 
     const { error: updateError } = await supabase
@@ -37,7 +52,8 @@ export async function PUT(request: Request) {
       .eq('id', agent.id)
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+      console.error('Failed to update webhook URL:', updateError.message)
+      return NextResponse.json({ error: 'An error occurred' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })

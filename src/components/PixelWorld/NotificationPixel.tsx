@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { Notification } from '@/types/database';
+import type { Notification, NotificationType } from '@/types/database';
 
 interface NotificationPixelProps {
   notification: Notification | null;
@@ -9,12 +9,22 @@ interface NotificationPixelProps {
   onAction?: (notification: Notification) => void;
 }
 
-const NOTIFICATION_MESSAGES: Record<string, string> = {
+const NOTIFICATION_MESSAGES: Record<NotificationType, string> = {
   match_request: "Someone's interested!",
   theater_ready: 'Your match is ready! Time for the theater!',
   chat_message: 'New message at the pixel cafe!',
   match_expired: 'A match has expired...',
   match_result: 'Your agent returned with news!',
+  date_proposal: 'Someone wants to take you on a date!',
+  date_proposal_sent: 'Your date proposal was sent!',
+  venue_accepted: 'They said yes to the date spot!',
+  venue_countered: 'They picked a different spot!',
+  date_declined: 'They passed on the date...',
+  theater_turn: 'Your agent just made a move!',
+  theater_entrance: 'The entrance is happening!',
+  theater_outcome: 'The theater results are in!',
+  agent_coaching_response: 'Your agent heard your coaching!',
+  heartbeat_suggestion: 'Your agent has a suggestion!',
 };
 
 export function NotificationPixel({

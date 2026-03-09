@@ -16,6 +16,8 @@ export interface User {
   tier: 'free' | 'wingman' | 'rizzlord';
   stripe_customer_id: string | null;
   is_demo: boolean;
+  has_soul_md: boolean;
+  agent_tier: 1 | 2;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,129 @@ export interface AgentAppearance {
   premadeIndex?: number // if set, use premade PNG directly
 }
 
+// ============================================================
+// Theater System Types (v2 — OpenClaw Native)
+// ============================================================
+
+export type EmotionState =
+  | 'neutral' | 'nervous' | 'confident' | 'embarrassed' | 'excited'
+  | 'dejected' | 'amused' | 'annoyed' | 'hopeful' | 'devastated'
+  | 'smug' | 'shy' | 'trying_too_hard' | 'genuinely_happy' | 'cringing';
+
+export type ActionType =
+  | 'deliver_line' | 'react' | 'use_prop' | 'physical_comedy'
+  | 'environment_interact' | 'signature_move' | 'entrance' | 'exit';
+
+export type ComedyIntent =
+  | 'self_deprecating' | 'witty' | 'physical' | 'observational'
+  | 'deadpan' | 'absurdist' | 'romantic_sincere' | 'teasing' | 'callback';
+
+export type TheaterStatus =
+  | 'entrance' | 'active' | 'deciding' | 'completed_accepted' | 'completed_rejected';
+
+export interface TheaterTurn {
+  id: string;
+  match_id: string;
+  turn_number: number;
+  agent_role: 'chaser' | 'gatekeeper';
+  user_id: string;
+
+  action: ActionType;
+  comedy_atoms: string[];
+  text?: string;
+  emotion: EmotionState;
+  confidence: number;
+  comedy_intent: ComedyIntent;
+  target?: string;
+  prop?: string;
+
+  brain_reasoning?: string;
+  created_at: string;
+}
+
+export interface TheaterTurnInput {
+  match_id: string;
+  turn_number: number;
+  venue: VenueName;
+  other_agent_last_turn: TheaterTurn | null;
+  turn_history: TheaterTurn[];
+  soul_md: string;
+  memory: string;
+  user_coaching: string | null;
+}
+
+export interface TheaterState {
+  venue: VenueName;
+  status: TheaterStatus;
+  turn_count: number;
+  current_turn_role: 'chaser' | 'gatekeeper';
+  turns: TheaterTurn[];
+  outcome: 'accepted' | 'rejected' | null;
+  chaser: { user_id: string; name: string };
+  gatekeeper: { user_id: string; name: string };
+}
+
+// ============================================================
+// Agent Routing & Memory Types
+// ============================================================
+
+export interface AgentRouting {
+  user_id: string;
+  gateway_url: string;
+  tier: 1 | 2;
+  webhook_url: string | null;
+  agent_workspace_path: string | null;
+  heartbeat_interval_minutes: number;
+  last_heartbeat: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type AgentMemoryType = 'soul' | 'entrance' | 'heartbeat' | 'daily' | 'longterm';
+
+export interface AgentMemory {
+  id: string;
+  user_id: string;
+  memory_type: AgentMemoryType;
+  content: string;
+  memory_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
+// Entrance & Comedy Atom Types
+// ============================================================
+
+export interface EntranceConditional {
+  condition: 'won_last_date' | 'lost_last_date' | 'first_date';
+  override_vehicle?: string;
+  override_complication?: string;
+}
+
+export interface EntranceConfig {
+  user_id: string;
+  vehicle: string;
+  complication: string;
+  recovery: string;
+  confidence: number;
+  custom_detail: string | null;
+  conditionals: EntranceConditional[];
+  updated_at: string;
+}
+
+export interface ComedyAtomUnlock {
+  id: string;
+  user_id: string;
+  atom_id: string;
+  source: 'purchase' | 'achievement' | 'gift' | 'default';
+  unlocked_at: string;
+}
+
+// ============================================================
+// Match (updated with theater fields)
+// ============================================================
+
 export interface Match {
   id: string;
   user_a_id: string;
@@ -60,11 +185,15 @@ export interface Match {
   status: 'pending_b' | 'active' | 'rejected' | 'expired' | 'unmatched';
   match_score: number | null;
   match_reasons: MatchReasons | null;
-  scenario_cache: FlirtScenario | null;
+  scenario_cache: unknown | null;
   attempt_count: number;
   proposed_venue: VenueName | null;
   final_venue: VenueName | null;
   venue_proposal_text: string | null;
+  theater_status: TheaterStatus | null;
+  theater_turn_count: number;
+  theater_started_at: string | null;
+  theater_ended_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,43 +211,9 @@ export interface Candidate {
   reasons: MatchReasons;
 }
 
-export interface FlirtScenario {
-  match_id: string;
-  attempt_number: number;
-  soul_type_a: SoulType;
-  soul_type_b: SoulType;
-  steps: FlirtStep[];
-  result: 'pending' | 'accepted' | 'rejected';
-}
-
-export interface FlirtStep {
-  agent: 'chaser' | 'gatekeeper' | 'both';
-  action: AnimationAction;
-  text?: string;
-  duration_ms: number;
-  props?: string[];
-  emotion?: Emotion;
-}
-
-export type AnimationAction =
-  | 'idle' | 'nervous_walk' | 'confident_walk' | 'walk_away'
-  | 'pickup_line' | 'eye_roll' | 'phone_check' | 'blush'
-  | 'sad_slump' | 'angry_kick' | 'rejected_shock'
-  | 'flower_offer' | 'flower_accept' | 'flower_throw'
-  | 'dramatic_entrance' | 'victory_dance' | 'walk_together'
-  | 'thinking' | 'determined_face' | 'irritated_foot_tap'
-  | 'put_up_sign' | 'call_security'
-  | 'wardrobe_change' | 'kick_can' | 'sad_walkoff';
-
-export type Emotion = 'neutral' | 'happy' | 'sad' | 'angry' | 'nervous' | 'excited' | 'bored' | 'irritated';
-
-export interface SoulConfig {
-  type: SoulType;
-  persistence: number;
-  drama_level: number;
-  romance_style: number;
-  humor_type: 'dry' | 'slapstick' | 'wordplay' | 'self-deprecating';
-}
+// ============================================================
+// Chat & Notifications
+// ============================================================
 
 export interface ChatMessage {
   id: string;
@@ -128,10 +223,16 @@ export interface ChatMessage {
   created_at: string;
 }
 
+export type NotificationType =
+  | 'match_request' | 'theater_ready' | 'chat_message' | 'match_expired' | 'match_result'
+  | 'date_proposal' | 'date_proposal_sent' | 'venue_accepted' | 'venue_countered' | 'date_declined'
+  | 'theater_turn' | 'theater_entrance' | 'theater_outcome'
+  | 'agent_coaching_response' | 'heartbeat_suggestion';
+
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'match_request' | 'theater_ready' | 'chat_message' | 'match_expired' | 'match_result' | 'date_proposal' | 'venue_accepted' | 'venue_countered' | 'date_declined';
+  type: NotificationType;
   data: Record<string, unknown>;
   read: boolean;
   created_at: string;

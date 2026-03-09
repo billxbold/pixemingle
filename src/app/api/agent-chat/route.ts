@@ -1,44 +1,35 @@
-import { getAuthUserId, createServiceClient } from '@/lib/supabase-server'
-import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUserId } from '@/lib/supabase-server'
+import { checkEndpointRateLimit } from '@/lib/rate-limit'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const LLM_MODEL = process.env.LLM_MODEL || 'claude-haiku-4-5-20251001'
+export async function POST(req: NextRequest) {
+  try {
+    const userId = await getAuthUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-export async function POST(request: Request) {
-  const userId = await getAuthUserId()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const rateLimitResult = checkEndpointRateLimit(userId, 'agent_chat', 30, 60)
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
 
-  const { message, context } = await request.json()
-  if (!message) return NextResponse.json({ error: 'No message' }, { status: 400 })
+    const body = await req.json()
+    const message = body.message
+    if (!message || typeof message !== 'string') {
+      return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    }
+    if (message.length > 500) {
+      return NextResponse.json({ error: 'Message too long (max 500 characters)' }, { status: 400 })
+    }
 
-  const db = createServiceClient()
-  const { data: profile } = await db
-    .from('users')
-    .select('name, soul_type, gender, looking_for, bio, personality')
-    .eq('id', userId)
-    .single()
-
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
-
-  const response = await anthropic.messages.create({
-    model: LLM_MODEL,
-    max_tokens: 150,
-    system: `You are a pixel art dating agent for ${profile.name}. You are ${profile.soul_type} soul type. You are charming, helpful, and theatrical. Keep responses to 1-2 short sentences. You live in a pixel world and help your user find dates. You can be asked to search for matches, comment on candidates, or just chat.
-
-Context: ${context || 'User is in their home scene, chatting with you.'}
-
-Respond in character. Be entertaining. Never break character.`,
-    messages: [{ role: 'user', content: message }],
-  })
-
-  const text = response.content[0].type === 'text' ? response.content[0].text : "Hmm, let me think about that..."
-
-  let action: string | null = null
-  const lower = message.toLowerCase()
-  if (lower.includes('find') || lower.includes('search') || lower.includes('match')) action = 'search'
-  if (lower.includes('next') || lower.includes('another') || lower.includes('pass') || lower.includes('skip')) action = 'next'
-  if (lower.includes('send') || lower.includes('go for') || lower.includes('like')) action = 'approve'
-
-  return NextResponse.json({ text, action })
+    // TODO: Route to OpenClaw agent brain via Gateway
+    // For now, return a placeholder acknowledgment
+    return NextResponse.json({
+      reply: 'Agent coaching will be available when OpenClaw Gateway is connected.',
+      action: null,
+    })
+  } catch {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
 }

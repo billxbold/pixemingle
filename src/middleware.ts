@@ -5,15 +5,12 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
 
-  // Dev mode: trust the dev-user-id cookie as a bypass (no Supabase auth needed)
+  // Dev mode: allow /world access without auth for testing
   const devUserId = request.cookies.get('dev-user-id')?.value
   if (process.env.NODE_ENV === 'development' && devUserId) {
-    // Pass dev user ID to API routes via a header they can read
-    response.headers.set('x-dev-user-id', devUserId)
     return response
   }
 
-  // Dev mode: allow /world access without auth for testing
   if (process.env.NODE_ENV === 'development' && request.nextUrl.pathname.startsWith('/world')) {
     return response
   }
@@ -41,13 +38,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Protect /api routes (except auth, payments webhook, connect, dev)
+  // Protect /api routes (except auth and payments webhook)
   if (
     request.nextUrl.pathname.startsWith('/api/') &&
     !request.nextUrl.pathname.startsWith('/api/auth/') &&
     !request.nextUrl.pathname.startsWith('/api/payments/webhook') &&
-    !request.nextUrl.pathname.startsWith('/api/connect/') &&
-    !request.nextUrl.pathname.startsWith('/api/dev/') &&
     !user
   ) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

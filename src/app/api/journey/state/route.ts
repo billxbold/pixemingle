@@ -23,27 +23,15 @@ export async function GET() {
   const isChaser = m.user_a_id === userId
   const role = isChaser ? 'chaser' : 'gatekeeper'
 
-  // Check for existing scenario
-  const { data: scenario } = await db
-    .from('scenarios')
-    .select('result')
-    .eq('match_id', m.id as string)
-    .order('attempt_number', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (scenario?.result === 'accepted' || scenario?.result === 'rejected') {
-    return NextResponse.json({ state: 'POST_MATCH', matchId: m.id, role })
-  }
-  if (scenario) {
-    // Scenario exists but result is pending — theater should play
-    // Try to recover venue from scenario_cache (may have been merged or overwritten)
-    const cache2 = m.scenario_cache as Record<string, unknown> | null
-    const proposal2 = cache2?.proposal as Record<string, unknown> | undefined
-    let theaterVenue = (proposal2?.chosen ?? proposal2?.venue) as string | undefined
-    // Fallback: if cache was overwritten by generate route, default to lounge
-    if (!theaterVenue) theaterVenue = 'lounge'
-    return NextResponse.json({ state: 'THEATER', matchId: m.id, role, venue: theaterVenue })
+  // Check theater status via theater_turns and match theater_status
+  if (m.status === 'venue_confirmed' || m.final_venue) {
+    const theaterStatus = m.theater_status as string | null
+    if (theaterStatus === 'completed_accepted' || theaterStatus === 'completed_rejected') {
+      return NextResponse.json({ state: 'POST_MATCH', matchId: m.id, role })
+    }
+    // Theater in progress or not started
+    const venue = (m.final_venue ?? m.proposed_venue ?? 'lounge') as string
+    return NextResponse.json({ state: 'THEATER', matchId: m.id, role, venue })
   }
 
   // Check for venue proposal stored in scenario_cache JSONB

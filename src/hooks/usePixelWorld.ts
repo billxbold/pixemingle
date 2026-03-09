@@ -11,8 +11,6 @@ import type { AgentAppearance } from '@/types/database'
 import { ParticleSystem } from '@/engine/particles'
 import { MontagePlayer, createResearchMontage } from '@/engine/montage'
 import { PropSystem } from '@/engine/propRenderer'
-import { SequencePlayer } from '@/engine/sequencePlayer'
-import type { FlirtScenario } from '@/types/database'
 
 // Cache venue images across scene transitions
 const venueImageCache = new Map<SceneName, VenueImages>()
@@ -26,11 +24,9 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
   const particlesRef = useRef<ParticleSystem>(new ParticleSystem())
   const montageRef = useRef<MontagePlayer | null>(null)
   const propsRef = useRef<PropSystem>(new PropSystem())
-  const sequenceRef = useRef<SequencePlayer | null>(null)
   const [currentScene, setCurrentScene] = useState<SceneName>('home')
   const [zoom, setZoom] = useState(() => {
     if (typeof window === 'undefined') return 2
-    // Auto-fit: home is 14×13 tiles at 48px each; pick zoom so map fills viewport
     const mapW = 14 * 48
     const mapH = 13 * 48
     const fitZoom = Math.min(window.innerWidth / mapW, window.innerHeight / mapH)
@@ -66,7 +62,6 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
     const ch = worldStateRef.current?.characters.get(1)
     if (!ch) return
     if (userAppearance) {
-      // AgentAppearance and CharacterAppearance are structurally identical — cast is safe
       ch.appearance = userAppearance as CharacterAppearance
       ch.sheetCanvas = undefined // reset so renderer re-requests the sheet
     }
@@ -100,9 +95,8 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
     montageRef.current = montage
   }, [])
 
-  /** Start in-canvas theater playback: spawn character 2, load scenario, play it */
+  /** Start in-canvas theater — stub, rewired in Phase 5 (useTheater) */
   const startTheater = useCallback((
-    scenario: FlirtScenario,
     matchAppearance: CharacterAppearance | null,
     onComplete: (result: string) => void,
   ) => {
@@ -116,52 +110,27 @@ export function usePixelWorld(userAppearance?: AgentAppearance) {
     const ch2 = ws.characters.get(2)
     if (ch2) {
       ch2.appearance = matchAppearance ?? { body: 1, eyes: 1, outfit: 'Outfit_01_48x48_01', hairstyle: 'Hairstyle_01_48x48_01', premadeIndex: 8 }
-      ch2.sheetCanvas = undefined // trigger async sheet load
+      ch2.sheetCanvas = undefined
     }
 
-    // Position characters facing each other in the center of the venue
+    // Position characters facing each other
     const ch1 = ws.characters.get(1)
     if (ch1 && ch2) {
       const cx = (ws.layout.cols * 48) / 2
       const cy = (ws.layout.rows * 48) / 2
       ch1.x = cx - 72; ch1.y = cy; ch1.tileCol = Math.floor((cx - 72) / 48); ch1.tileRow = Math.floor(cy / 48)
       ch2.x = cx + 72; ch2.y = cy; ch2.tileCol = Math.floor((cx + 72) / 48); ch2.tileRow = Math.floor(cy / 48)
-      ch1.path = []; ch2.path = [] // clear any pending movement
+      ch1.path = []; ch2.path = []
     }
 
-    // Create SequencePlayer with callbacks that drive the canvas
-    const player = new SequencePlayer(ws, particlesRef.current, {
-      onStepStart: () => {},
-      onStepEnd: () => {},
-      onComplete: (result) => onComplete(result),
-      onSpeechBubble: (agent, text) => {
-        const id = agent === 'chaser' ? 1 : agent === 'gatekeeper' ? 2 : null
-        if (id) {
-          const ch = ws.characters.get(id)
-          if (ch) {
-            ch.speechText = text
-            ch.speechTimer = Math.max(2, text.length * 0.06)
-          }
-        }
-        if (agent === 'both') {
-          for (const cid of [1, 2]) {
-            const ch = ws.characters.get(cid)
-            if (ch) { ch.speechText = text; ch.speechTimer = Math.max(2, text.length * 0.06) }
-          }
-        }
-      },
-      onPropSpawn: (propId, x, y) => propsRef.current.spawn(propId, x, y),
-    })
-    player.setChaserAndGatekeeper(1, 2)
-    player.load(scenario)
-    player.play()
-    sequenceRef.current = player
+    // No-op stub: auto-complete after a brief delay so the flow continues
+    // Real theater playback will be implemented in Phase 5
+    setTimeout(() => onComplete('accepted'), 3000)
   }, [])
 
   // Called each frame from Canvas update loop
   const onFrameUpdate = useCallback((dt: number) => {
     montageRef.current?.update(dt)
-    sequenceRef.current?.update(dt)
     particlesRef.current.update(dt)
     propsRef.current.update(dt)
   }, [])

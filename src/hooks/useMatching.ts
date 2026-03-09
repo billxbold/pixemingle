@@ -8,12 +8,23 @@ export function useMatching() {
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const [error, setError] = useState<string | null>(null)
+
   const search = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch('/api/matching/search', { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Search failed (${res.status})`)
+      }
       const data = await res.json()
       setCandidates(data.candidates)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Search failed'
+      setError(message)
+      setCandidates(null)
     } finally {
       setLoading(false)
     }
@@ -40,6 +51,10 @@ export function useMatching() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ venue }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `Failed to propose date (${res.status})`)
+    }
     return res.json()
   }, [])
 
@@ -49,8 +64,12 @@ export function useMatching() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, venue }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `Failed to respond to venue (${res.status})`)
+    }
     return res.json()
   }, [])
 
-  return { candidates, selectedCandidate, setSelectedCandidate, loading, search, approve, pass, proposeDate, respondVenue }
+  return { candidates, selectedCandidate, setSelectedCandidate, loading, error, search, approve, pass, proposeDate, respondVenue }
 }

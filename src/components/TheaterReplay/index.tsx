@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { FlirtScenario, FlirtStep, AgentAppearance } from '@/types/database';
+import type { AgentAppearance, TheaterTurn } from '@/types/database';
 
 interface TheaterReplayProps {
-  scenario: FlirtScenario;
+  turns: TheaterTurn[];
+  outcome: 'accepted' | 'rejected' | null;
   chaserName: string;
   gatekeeperName: string;
   chaserAppearance: AgentAppearance | null;
@@ -16,55 +17,45 @@ interface TheaterReplayProps {
 }
 
 const ACTION_LABELS: Record<string, string> = {
-  idle: 'standing still',
-  nervous_walk: 'walks over nervously',
-  confident_walk: 'struts in confidently',
-  walk_away: 'walks away',
-  pickup_line: 'delivers a pickup line',
-  eye_roll: 'rolls their eyes',
-  phone_check: 'checks their phone',
-  blush: 'blushes',
-  sad_slump: 'slumps sadly',
-  angry_kick: 'kicks the ground angrily',
-  rejected_shock: 'looks shocked at the rejection',
-  flower_offer: 'offers a flower',
-  flower_accept: 'accepts the flower',
-  flower_throw: 'throws the flower away',
-  dramatic_entrance: 'makes a dramatic entrance',
-  victory_dance: 'does a victory dance',
-  walk_together: 'walks off together',
-  thinking: 'is thinking...',
-  determined_face: 'puts on a determined face',
-  irritated_foot_tap: 'taps foot impatiently',
-  put_up_sign: 'puts up a sign',
-  call_security: 'calls security',
+  deliver_line: 'delivers a line',
+  react: 'reacts',
+  use_prop: 'uses a prop',
+  physical_comedy: 'does physical comedy',
+  environment_interact: 'interacts with the environment',
+  signature_move: 'pulls a signature move',
+  entrance: 'makes an entrance',
+  exit: 'exits the scene',
 };
 
 const EMOTION_COLORS: Record<string, string> = {
   neutral: 'text-gray-300',
-  happy: 'text-green-400',
-  sad: 'text-blue-400',
-  angry: 'text-red-400',
   nervous: 'text-yellow-400',
+  confident: 'text-green-400',
+  embarrassed: 'text-red-300',
   excited: 'text-pink-400',
-  bored: 'text-gray-500',
-  irritated: 'text-orange-400',
+  dejected: 'text-blue-400',
+  amused: 'text-green-300',
+  annoyed: 'text-orange-400',
+  hopeful: 'text-cyan-400',
+  devastated: 'text-blue-600',
+  smug: 'text-amber-400',
+  shy: 'text-pink-300',
+  trying_too_hard: 'text-yellow-500',
+  genuinely_happy: 'text-green-500',
+  cringing: 'text-red-400',
 };
 
-function getAgentLabel(agent: FlirtStep['agent'], chaserName: string, gatekeeperName: string): string {
-  if (agent === 'chaser') return chaserName;
-  if (agent === 'gatekeeper') return gatekeeperName;
-  return `${chaserName} & ${gatekeeperName}`;
+function getAgentLabel(role: TheaterTurn['agent_role'], chaserName: string, gatekeeperName: string): string {
+  return role === 'chaser' ? chaserName : gatekeeperName;
 }
 
-function getAgentColor(agent: FlirtStep['agent']): string {
-  if (agent === 'chaser') return 'text-pink-400';
-  if (agent === 'gatekeeper') return 'text-purple-400';
-  return 'text-amber-400';
+function getAgentColor(role: TheaterTurn['agent_role']): string {
+  return role === 'chaser' ? 'text-pink-400' : 'text-purple-400';
 }
 
 export function TheaterReplay({
-  scenario,
+  turns,
+  outcome,
   chaserName,
   gatekeeperName,
   chaserPhoto,
@@ -79,26 +70,25 @@ export function TheaterReplay({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stepsContainerRef = useRef<HTMLDivElement>(null);
 
-  const steps = useMemo(() => scenario.steps ?? [], [scenario.steps]);
+  const turnList = useMemo(() => turns ?? [], [turns]);
 
   const advanceStep = useCallback(() => {
     setCurrentStep((prev) => {
       const next = prev + 1;
-      if (next >= steps.length) {
+      if (next >= turnList.length) {
         setIsPlaying(false);
         setIsFinished(true);
         return prev;
       }
       return next;
     });
-  }, [steps.length]);
+  }, [turnList.length]);
 
-  // Schedule next step when currentStep changes and we're playing
   useEffect(() => {
-    if (!isPlaying || currentStep < 0 || currentStep >= steps.length) return;
+    if (!isPlaying || currentStep < 0 || currentStep >= turnList.length) return;
 
-    const step = steps[currentStep];
-    const delay = step.duration_ms ?? 2000;
+    // Each turn displays for 2 seconds
+    const delay = 2000;
 
     timerRef.current = setTimeout(() => {
       advanceStep();
@@ -107,9 +97,8 @@ export function TheaterReplay({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [currentStep, isPlaying, steps, advanceStep]);
+  }, [currentStep, isPlaying, turnList, advanceStep]);
 
-  // Auto-scroll to latest step
   useEffect(() => {
     if (stepsContainerRef.current) {
       stepsContainerRef.current.scrollTop = stepsContainerRef.current.scrollHeight;
@@ -118,12 +107,10 @@ export function TheaterReplay({
 
   const handlePlay = () => {
     if (isFinished) {
-      // Replay
       setCurrentStep(-1);
       setIsFinished(false);
     }
     setIsPlaying(true);
-    // Kick off first step
     setCurrentStep(0);
   };
 
@@ -133,7 +120,6 @@ export function TheaterReplay({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
       const input = document.createElement('input');
       input.value = window.location.href;
       document.body.appendChild(input);
@@ -152,21 +138,20 @@ export function TheaterReplay({
     window.open(`https://x.com/intent/tweet?text=${text}`, '_blank');
   };
 
-  const resultText = scenario.result === 'accepted'
+  const resultText = outcome === 'accepted'
     ? 'They matched!'
-    : scenario.result === 'rejected'
+    : outcome === 'rejected'
     ? 'They didn\'t match this time...'
     : 'Result pending...';
 
-  const resultColor = scenario.result === 'accepted'
+  const resultColor = outcome === 'accepted'
     ? 'text-green-400'
-    : scenario.result === 'rejected'
+    : outcome === 'rejected'
     ? 'text-red-400'
     : 'text-yellow-400';
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center relative overflow-hidden">
-      {/* Pixel-art background pattern */}
       <div
         className="absolute inset-0 opacity-5"
         style={{
@@ -177,7 +162,6 @@ export function TheaterReplay({
         }}
       />
 
-      {/* Header */}
       <header className="relative z-10 w-full max-w-2xl mx-auto pt-8 pb-4 px-4">
         <h1 className="text-center font-mono text-2xl text-pink-400 tracking-widest">
           PIXEMINGLE THEATER
@@ -187,45 +171,29 @@ export function TheaterReplay({
         </p>
       </header>
 
-      {/* Character cards */}
       <div className="relative z-10 w-full max-w-2xl mx-auto px-4 flex justify-center gap-8 mb-6">
-        {/* Chaser card */}
         <div className="flex flex-col items-center gap-2">
           <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-pink-500/40 bg-gray-900">
             {chaserPhoto ? (
-              <img
-                src={chaserPhoto}
-                alt={chaserName}
-                className="w-full h-full object-cover blur-lg saturate-50"
-              />
+              <img src={chaserPhoto} alt={chaserName} className="w-full h-full object-cover blur-lg saturate-50" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-2xl font-mono text-pink-400">
-                ?
-              </div>
+              <div className="w-full h-full flex items-center justify-center text-2xl font-mono text-pink-400">?</div>
             )}
           </div>
           <span className="font-mono text-sm text-pink-400">{chaserName}</span>
           <span className="font-mono text-xs text-gray-500 uppercase">chaser ({chaserGender})</span>
         </div>
 
-        {/* VS */}
         <div className="flex items-center">
           <span className="font-mono text-lg text-gray-600">vs</span>
         </div>
 
-        {/* Gatekeeper card */}
         <div className="flex flex-col items-center gap-2">
           <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-purple-500/40 bg-gray-900">
             {gatekeeperPhoto ? (
-              <img
-                src={gatekeeperPhoto}
-                alt={gatekeeperName}
-                className="w-full h-full object-cover blur-lg saturate-50"
-              />
+              <img src={gatekeeperPhoto} alt={gatekeeperName} className="w-full h-full object-cover blur-lg saturate-50" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-2xl font-mono text-purple-400">
-                ?
-              </div>
+              <div className="w-full h-full flex items-center justify-center text-2xl font-mono text-purple-400">?</div>
             )}
           </div>
           <span className="font-mono text-sm text-purple-400">{gatekeeperName}</span>
@@ -233,7 +201,6 @@ export function TheaterReplay({
         </div>
       </div>
 
-      {/* Steps display */}
       <div className="relative z-10 w-full max-w-2xl mx-auto px-4 flex-1 flex flex-col">
         <div
           ref={stepsContainerRef}
@@ -247,49 +214,36 @@ export function TheaterReplay({
             </div>
           )}
 
-          {steps.slice(0, currentStep + 1).map((step, idx) => {
-            const label = getAgentLabel(step.agent, chaserName, gatekeeperName);
-            const labelColor = getAgentColor(step.agent);
-            const emotionColor = step.emotion ? EMOTION_COLORS[step.emotion] ?? 'text-gray-300' : '';
-            const actionLabel = ACTION_LABELS[step.action] ?? step.action;
+          {turnList.slice(0, currentStep + 1).map((turn, idx) => {
+            const label = getAgentLabel(turn.agent_role, chaserName, gatekeeperName);
+            const labelColor = getAgentColor(turn.agent_role);
+            const emotionColor = turn.emotion ? EMOTION_COLORS[turn.emotion] ?? 'text-gray-300' : '';
+            const actionLabel = ACTION_LABELS[turn.action] ?? turn.action;
 
             return (
               <div
-                key={idx}
-                className={`transition-opacity duration-500 ${
-                  idx === currentStep ? 'opacity-100' : 'opacity-70'
-                }`}
+                key={turn.id ?? idx}
+                className={`transition-opacity duration-500 ${idx === currentStep ? 'opacity-100' : 'opacity-70'}`}
               >
                 <div className="flex items-start gap-3">
-                  {/* Step number */}
                   <span className="font-mono text-xs text-gray-600 mt-1 w-6 text-right flex-shrink-0">
-                    {idx + 1}.
+                    {turn.turn_number}.
                   </span>
-
                   <div className="flex-1">
-                    {/* Agent name + action */}
                     <p className="font-mono text-sm">
                       <span className={`font-bold ${labelColor}`}>{label}</span>
                       <span className="text-gray-500"> {actionLabel}</span>
-                      {step.emotion && step.emotion !== 'neutral' && (
-                        <span className={`ml-2 text-xs ${emotionColor}`}>
-                          [{step.emotion}]
-                        </span>
+                      {turn.emotion && turn.emotion !== 'neutral' && (
+                        <span className={`ml-2 text-xs ${emotionColor}`}>[{turn.emotion}]</span>
                       )}
                     </p>
-
-                    {/* Speech text */}
-                    {step.text && (
+                    {turn.text && (
                       <p className="mt-1 font-mono text-sm text-gray-200 italic pl-3 border-l-2 border-gray-700">
-                        &ldquo;{step.text}&rdquo;
+                        &ldquo;{turn.text}&rdquo;
                       </p>
                     )}
-
-                    {/* Props */}
-                    {step.props && step.props.length > 0 && (
-                      <p className="mt-1 font-mono text-xs text-gray-500">
-                        props: {step.props.join(', ')}
-                      </p>
+                    {turn.comedy_atoms && turn.comedy_atoms.length > 0 && (
+                      <p className="mt-1 font-mono text-xs text-gray-500">atoms: {turn.comedy_atoms.join(', ')}</p>
                     )}
                   </div>
                 </div>
@@ -297,34 +251,27 @@ export function TheaterReplay({
             );
           })}
 
-          {/* Result */}
           {isFinished && (
             <div className="pt-4 border-t border-gray-700 text-center">
-              <p className={`font-mono text-lg font-bold ${resultColor}`}>
-                {resultText}
-              </p>
+              <p className={`font-mono text-lg font-bold ${resultColor}`}>{resultText}</p>
             </div>
           )}
         </div>
 
-        {/* Progress bar */}
-        {steps.length > 0 && currentStep >= 0 && (
+        {turnList.length > 0 && currentStep >= 0 && (
           <div className="mt-3 flex items-center gap-3">
             <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-pink-500 transition-all duration-300"
-                style={{
-                  width: `${((Math.min(currentStep + 1, steps.length)) / steps.length) * 100}%`,
-                }}
+                style={{ width: `${((Math.min(currentStep + 1, turnList.length)) / turnList.length) * 100}%` }}
               />
             </div>
             <span className="font-mono text-xs text-gray-500">
-              {Math.min(currentStep + 1, steps.length)}/{steps.length}
+              {Math.min(currentStep + 1, turnList.length)}/{turnList.length}
             </span>
           </div>
         )}
 
-        {/* Controls */}
         <div className="flex justify-center gap-4 mt-6">
           {(!isPlaying || isFinished) && (
             <button
@@ -334,20 +281,15 @@ export function TheaterReplay({
               {isFinished ? 'Replay' : 'Play'}
             </button>
           )}
-
           {isPlaying && !isFinished && (
             <div className="px-6 py-3 bg-gray-800 border border-pink-500/30 rounded-lg">
-              <span className="font-mono text-sm text-pink-300 animate-pulse">
-                Playing...
-              </span>
+              <span className="font-mono text-sm text-pink-300 animate-pulse">Playing...</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Share + CTA section */}
       <div className="relative z-10 w-full max-w-2xl mx-auto px-4 py-8 space-y-4">
-        {/* Share buttons */}
         <div className="flex justify-center gap-3">
           <button
             onClick={handleCopyLink}
@@ -362,8 +304,6 @@ export function TheaterReplay({
             Share on X
           </button>
         </div>
-
-        {/* CTA */}
         <div className="text-center">
           <a
             href="/"
@@ -374,11 +314,8 @@ export function TheaterReplay({
         </div>
       </div>
 
-      {/* Watermark */}
       <div className="fixed bottom-4 right-4 z-50">
-        <span className="font-mono text-xs text-gray-700 select-none">
-          pixemingle.com
-        </span>
+        <span className="font-mono text-xs text-gray-700 select-none">pixemingle.com</span>
       </div>
     </div>
   );

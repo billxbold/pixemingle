@@ -85,6 +85,7 @@ export function AgentChatBar({ onAgentResponse, context }: AgentChatBarProps) {
           onChange={(e) => setInput(e.target.value)}
           placeholder={sending ? 'Agent is thinking...' : 'Talk to your agent...'}
           disabled={sending}
+          aria-label="Message your agent"
           className="flex-1 bg-gray-800 text-white text-sm font-mono rounded px-3 py-2 border border-gray-700 focus:border-pink-500 focus:outline-none disabled:opacity-50"
         />
         <button

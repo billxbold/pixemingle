@@ -1,39 +1,52 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/lib/supabase';
 import type { ChatMessage } from '@/types/database';
 
 export function useChat(matchId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load messages via API + poll for new ones
+  const fetchMessages = useCallback(async () => {
+    if (!matchId) return;
+    try {
+      const res = await fetch(`/api/chat/${matchId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messages) setMessages(data.messages as ChatMessage[]);
+      }
+    } catch { /* network error */ }
+  }, [matchId]);
+
+  // Initial fetch + realtime subscription for new messages
   useEffect(() => {
     if (!matchId) return;
 
     setIsLoading(true);
+    fetchMessages().finally(() => setIsLoading(false));
 
-    const loadMessages = async () => {
-      try {
-        const res = await fetch(`/api/chat/${matchId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.messages) setMessages(data.messages as ChatMessage[]);
-        }
-      } catch { /* network error */ }
-      setIsLoading(false);
-    };
-
-    loadMessages();
-
-    // Poll every 3s for new messages
-    pollRef.current = setInterval(loadMessages, 3000);
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`chat:${matchId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `match_id=eq.${matchId}`,
+      }, (payload) => {
+        setMessages(prev => {
+          const newMsg = payload.new as ChatMessage;
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+      })
+      .subscribe();
 
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      supabase.removeChannel(channel);
     };
-  }, [matchId]);
+  }, [matchId, fetchMessages]);
 
   const sendMessage = useCallback(
     async (content: string) => {

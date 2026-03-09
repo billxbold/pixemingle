@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePixelWorld } from '@/hooks/usePixelWorld'
 import { useMatching } from '@/hooks/useMatching'
-import { useScenario } from '@/hooks/useScenario'
+import { useDateSync } from '@/hooks/useDateSync'
 import { useJourneyState } from '@/hooks/useJourneyState'
 import { Canvas } from './Canvas'
 import { DateProposalOverlay } from './DateProposalOverlay'
@@ -13,8 +13,14 @@ import { InvitationNotification } from './InvitationNotification'
 import { ChatPanel } from './ChatPanel'
 import { DevToolbar } from './DevToolbar'
 import { useChat } from '@/hooks/useChat'
+import { PortraitPanel } from '@/components/PortraitPanel'
+import { resolveExpression } from '@/engine/expressionEngine'
+import { parseExpressionPreferences } from '@/engine/soulMdParser'
+import type { ExpressionPreferences } from '@/engine/soulMdParser'
+import type { PortraitExpression } from '@/engine/types'
+import type { EmotionState } from '@/types/database'
 import type { SceneName } from '@/engine/sceneManager'
-import type { AgentAppearance, Candidate, FlirtScenario } from '@/types/database'
+import type { AgentAppearance, Candidate } from '@/types/database'
 
 const SCENE_LABELS: Record<SceneName, string> = {
   home: 'Home',
@@ -59,7 +65,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     reactionData,
     broadcastDateProposal,
     broadcastVenueResponse,
-  } = useScenario(journey.matchId ?? initialMatchId, journey.role ?? initialRole, journey.recoveredProposal)
+  } = useDateSync(journey.matchId ?? initialMatchId, journey.role ?? initialRole, journey.recoveredProposal)
 
   // Post-match human chat
   const chatMatchId = journey.state === 'POST_MATCH' ? (journey.matchId ?? initialMatchId) : null
@@ -68,6 +74,69 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   // Partner info (fetched on match)
   const [partnerName, setPartnerName] = useState('Agent')
   const [partnerAppearance, setPartnerAppearance] = useState<AgentAppearance | null>(null)
+
+  // Portrait panel state (theater)
+  const [chaserEmotion, setChaserEmotion] = useState<PortraitExpression>('neutral')
+  const [gatekeeperEmotion, setGatekeeperEmotion] = useState<PortraitExpression>('neutral')
+  const [activeSpeaker, setActiveSpeaker] = useState<'chaser' | 'gatekeeper' | null>(null)
+  const [speechText, setSpeechText] = useState<string | null>(null)
+  const defaultPrefs = useRef<ExpressionPreferences>(parseExpressionPreferences(''))
+  const [chaserSoulPrefs, setChaserSoulPrefs] = useState<ExpressionPreferences>(defaultPrefs.current)
+  const [gatekeeperSoulPrefs, setGatekeeperSoulPrefs] = useState<ExpressionPreferences>(defaultPrefs.current)
+
+  // Derive character IDs for portraits
+  const chaserCharId = userAppearance?.premadeIndex
+    ? `char_${String(userAppearance.premadeIndex).padStart(2, '0')}`
+    : 'char_custom_chaser'
+  const gatekeeperCharId = partnerAppearance?.premadeIndex
+    ? `char_${String(partnerAppearance.premadeIndex).padStart(2, '0')}`
+    : 'char_custom_gatekeeper'
+
+  /**
+   * Updates portrait panel from a theater turn.
+   * Called by useTheater (Phase 5) or dev toolbar for testing.
+   */
+  const updatePortraitFromTurn = useCallback((turn: {
+    agent_role: 'chaser' | 'gatekeeper'
+    emotion: EmotionState
+    text?: string
+    soul_md?: string
+  }) => {
+    const prefs = turn.agent_role === 'chaser' ? chaserSoulPrefs : gatekeeperSoulPrefs
+    const config = resolveExpression(turn.emotion, prefs)
+
+    if (turn.agent_role === 'chaser') {
+      setChaserEmotion(config.portrait)
+    } else {
+      setGatekeeperEmotion(config.portrait)
+    }
+
+    setActiveSpeaker(turn.agent_role)
+    setSpeechText(turn.text ?? null)
+  }, [chaserSoulPrefs, gatekeeperSoulPrefs])
+
+  // Expose updatePortraitFromTurn for Phase 5 integration and dev testing
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      (window as unknown as Record<string, unknown>).__updatePortrait = updatePortraitFromTurn;
+      (window as unknown as Record<string, unknown>).__setChaserSoulPrefs = setChaserSoulPrefs;
+      (window as unknown as Record<string, unknown>).__setGatekeeperSoulPrefs = setGatekeeperSoulPrefs;
+    }
+  }, [updatePortraitFromTurn])
+
+  const handleSelectCandidate = useCallback(async (candidate: Candidate) => {
+    setSelectedCandidate(candidate)
+    try {
+      const { matchId } = await approve(candidate.user.id, candidate.score, candidate.reasons)
+      setPartnerName(candidate.user.name)
+      setPartnerAppearance(candidate.user.agent_appearance)
+      journey.transition('PROPOSING', { matchId, role: 'chaser' })
+    } catch (err) {
+      console.error('Failed to approve candidate:', err)
+      const ch = worldStateRef.current?.characters.get(1)
+      if (ch) { ch.speechText = "Oops, something went wrong..."; ch.speechTimer = 3 }
+    }
+  }, [approve, journey, worldStateRef, setSelectedCandidate])
 
   // Wire agent chat actions to journey transitions
   const handleAgentResponse = useCallback((text: string, action: string | null) => {
@@ -90,21 +159,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     if (action === 'approve' && journey.state === 'BROWSING' && selectedCandidate) {
       handleSelectCandidate(selectedCandidate)
     }
-  }, [worldStateRef, playMontage, journey, search, selectedCandidate]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSelectCandidate = useCallback(async (candidate: Candidate) => {
-    setSelectedCandidate(candidate)
-    try {
-      const { matchId } = await approve(candidate.user.id, candidate.score, candidate.reasons)
-      setPartnerName(candidate.user.name)
-      setPartnerAppearance(candidate.user.agent_appearance)
-      journey.transition('PROPOSING', { matchId, role: 'chaser' })
-    } catch (err) {
-      console.error('Failed to approve candidate:', err)
-      const ch = worldStateRef.current?.characters.get(1)
-      if (ch) { ch.speechText = "Oops, something went wrong..."; ch.speechTimer = 3 }
-    }
-  }, [approve, journey, worldStateRef, setSelectedCandidate])
+  }, [worldStateRef, playMontage, journey, search, selectedCandidate, handleSelectCandidate])
 
   const handleFindAnother = useCallback(() => {
     worldStateRef.current?.characters.delete(2)
@@ -124,7 +179,6 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
   // Gatekeeper receives date proposal notification
   useEffect(() => {
     if (dateStatus === 'proposed' && journey.state === 'HOME_IDLE' && (journey.role || initialRole) === 'gatekeeper') {
-      // Agent reacts
       const ch = worldStateRef.current?.characters.get(1)
       if (ch) {
         ch.speechText = "Hey, someone wants to take you out!"
@@ -133,59 +187,26 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
     }
   }, [dateStatus, journey.state, journey.role, initialRole, worldStateRef])
 
-  // Wire realtime events to journey transitions + theater start
+  // Wire realtime events to journey transitions + theater entry
   useEffect(() => {
-    const enterTheater = async (venue: SceneName, matchIdOverride?: string) => {
+    const enterTheater = async (venue: SceneName) => {
       theaterStartedRef.current = true
       transitionTo(venue)
       journey.transition('THEATER')
 
-      // Generate or fetch scenario, then start in-canvas theater
-      const matchId = matchIdOverride ?? journey.matchId ?? initialMatchId
+      // Theater entry — rewired in Phase 5 (useTheater)
+      // For now, start the no-op theater stub
+      const matchId = journey.matchId ?? initialMatchId
       if (!matchId) return
 
-      const onTheaterComplete = (result: string) => {
+      startTheater(partnerAppearance, (result: string) => {
         if (result === 'rejected') {
           transitionTo('home')
           journey.transition('HOME_IDLE')
         } else {
-          // 'accepted' or 'pending' (LLM didn't specify) — treat as success
           journey.transition('POST_MATCH')
         }
-      }
-
-      let scenario: FlirtScenario | null = null
-
-      try {
-        const res = await fetch(`/api/scenarios/${matchId}/generate`, { method: 'POST' })
-        if (res.ok) {
-          const data = await res.json()
-          scenario = data.scenario ?? null
-        }
-      } catch { /* network error */ }
-
-      if (!scenario) {
-        // Use fallback mini-scenario when API unavailable
-        scenario = {
-          match_id: matchId,
-          attempt_number: 1,
-          soul_type_a: 'funny',
-          soul_type_b: 'romantic',
-          steps: [
-            { agent: 'chaser', action: 'confident_walk', text: "Hey there! You look amazing.", duration_ms: 2500, emotion: 'excited' },
-            { agent: 'gatekeeper', action: 'eye_roll', text: "Oh? Tell me more...", duration_ms: 2500 },
-            { agent: 'chaser', action: 'flower_offer', text: "I brought you these!", duration_ms: 2000, emotion: 'happy', props: ['flower'] },
-            { agent: 'gatekeeper', action: 'blush', text: "That's actually sweet.", duration_ms: 2000, emotion: 'happy' },
-            { agent: 'chaser', action: 'pickup_line', text: "So... want to get out of here?", duration_ms: 2500 },
-            { agent: 'gatekeeper', action: 'thinking', text: "Hmm, let me think...", duration_ms: 2000 },
-            { agent: 'gatekeeper', action: 'flower_accept', text: "Why not! Let's go!", duration_ms: 2000, emotion: 'excited' },
-            { agent: 'both', action: 'victory_dance', text: "It's a match!", duration_ms: 3000, emotion: 'excited' },
-          ],
-          result: 'accepted',
-        }
-      }
-
-      startTheater(scenario, partnerAppearance, onTheaterComplete)
+      })
     }
 
     // Dev shortcut: expose enterTheater on window for testing
@@ -193,7 +214,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       (window as unknown as Record<string, unknown>).__enterTheater = enterTheater
     }
 
-    // Enter theater when venue accepted/countered (don't require WAITING — state may be HOME_IDLE or PROPOSING)
+    // Enter theater when venue accepted/countered
     if (dateStatus === 'accepted' && journey.state !== 'THEATER' && journey.state !== 'POST_MATCH') {
       const venue = venueProposal?.venue as SceneName
       if (venue) enterTheater(venue)
@@ -213,7 +234,7 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
       const venue = (journey.recoveredVenue ?? 'lounge') as SceneName
       enterTheater(venue)
     }
-  }, [dateStatus, journey, venueProposal, reactionData, transitionTo, startTheater, initialMatchId])
+  }, [dateStatus, journey, venueProposal, reactionData, transitionTo, startTheater, initialMatchId, partnerAppearance])
 
   const journeyContext = (() => {
     switch (journey.state) {
@@ -335,6 +356,21 @@ export function PixelWorld({ matchId: initialMatchId = null, role: initialRole =
           </div>
         )}
       </div>
+
+      {/* Portrait panel — visible during THEATER */}
+      <PortraitPanel
+        chaserCharacterId={chaserCharId}
+        gatekeeperCharacterId={gatekeeperCharId}
+        chaserEmotion={chaserEmotion}
+        gatekeeperEmotion={gatekeeperEmotion}
+        chaserVariant={chaserSoulPrefs.portrait_variant}
+        gatekeeperVariant={gatekeeperSoulPrefs.portrait_variant}
+        activeSpeaker={activeSpeaker}
+        speechText={speechText}
+        chaserName={userId ? 'You' : 'Chaser'}
+        gatekeeperName={partnerName}
+        visible={journey.state === 'THEATER'}
+      />
 
       {/* Agent chat bar — always at bottom */}
       <AgentChatBar onAgentResponse={handleAgentResponse} context={journeyContext} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface TheaterControlsProps {
   isPlaying: boolean;
@@ -30,9 +30,11 @@ export function TheaterControls({
   const [showResult, setShowResult] = useState(false);
 
   // Show result panel when scenario completes
-  if (scenarioResult === 'pending' && !isPlaying && totalSteps > 0 && currentStep >= totalSteps - 1) {
-    if (!showResult) setShowResult(true);
-  }
+  useEffect(() => {
+    if (scenarioResult === 'pending' && !isPlaying && totalSteps > 0 && currentStep >= totalSteps - 1) {
+      setShowResult(true);
+    }
+  }, [scenarioResult, isPlaying, totalSteps, currentStep]);
 
   return (
     <div className="absolute bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-40 w-[90vw] sm:w-auto max-w-md">

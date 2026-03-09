@@ -42,7 +42,13 @@ export async function POST(
 
   const db = createServiceClient();
 
-  const { content } = await request.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+  const { content } = body as { content?: string };
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return NextResponse.json({ error: 'Empty message' }, { status: 400 });
   }
@@ -89,7 +95,10 @@ export async function POST(
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Failed to send chat message:', error.message);
+    return NextResponse.json({ error: 'An error occurred' }, { status: 500 });
+  }
 
   return NextResponse.json({ message });
 }

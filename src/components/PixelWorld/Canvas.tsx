@@ -164,17 +164,21 @@ export function Canvas({
           worldState.getLayout().cols,
           worldState.getLayout().rows,
           venueImagesRef?.current,
+          worldState.atomPlayers,
+          worldState.cameraSystem.getTransform(),
         )
         offsetRef.current = { x: offsetX, y: offsetY }
 
-        // Particles
+        // Particles (use effective zoom from camera)
+        const camTransform = worldState.cameraSystem.getTransform()
+        const effectiveZoom = zoom * camTransform.zoom
         if (particlesRef?.current && particlesRef.current.particles.length > 0) {
-          renderParticles(ctx, particlesRef.current.particles, offsetX, offsetY, zoom)
+          renderParticles(ctx, particlesRef.current.particles, offsetX, offsetY, effectiveZoom)
         }
 
         // Props
         if (propsRef?.current && propsRef.current.props.length > 0) {
-          propsRef.current.render(ctx, offsetX, offsetY, zoom)
+          propsRef.current.render(ctx, offsetX, offsetY, effectiveZoom)
         }
 
         // Scene fade overlay

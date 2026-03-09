@@ -2,12 +2,23 @@ import { getAuthUserId, createServiceClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { COSMETICS_CATALOG } from '@/lib/constants';
+import { checkEndpointRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json();
+  const rateLimitResult = checkEndpointRateLimit(userId, 'cosmetics_purchase', 10, 60);
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
   const { item_id } = body;
   if (!item_id) return NextResponse.json({ error: 'Missing item_id' }, { status: 400 });
 
@@ -42,7 +53,7 @@ export async function POST(request: Request) {
     metadata: { user_id: userId, item_id: item.id, item_type: 'cosmetic' },
   });
 
-  await db.from('purchases').insert({ user_id: userId, item_type: 'cosmetic', item_id: item.id, amount_cents: item.price_cents, stripe_payment_id: paymentIntent.id });
+  await db.from('purchases').insert({ user_id: userId, item_type: 'cosmetic', item_id: item.id, amount_cents: item.price_cents, stripe_payment_id: paymentIntent.id, status: 'pending' });
 
   return NextResponse.json({ client_secret: paymentIntent.client_secret });
 }

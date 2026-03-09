@@ -10,6 +10,8 @@ import { renderSpeechBubbles } from '../speechBubbleRenderer'
 import { renderEmotes } from '../emoteRenderer'
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles'
 import { hasWallSprites, getWallInstances, wallColorToHex } from '../wallTiles'
+import { getBodyModifierYOffset, getBodyModifierScale } from '../bodyModifiers'
+import type { AtomPlayer } from '../atomPlayer'
 import {
   CHARACTER_SITTING_OFFSET_PX,
   CHARACTER_Z_SORT_OFFSET,
@@ -107,6 +109,7 @@ export function renderScene(
   zoom: number,
   selectedAgentId: number | null,
   hoveredAgentId: number | null,
+  atomPlayers?: Map<number, AtomPlayer>,
 ): void {
   const drawables: ZDrawable[] = []
 
@@ -129,20 +132,36 @@ export function renderScene(
     if (ch.appearance) ensureCharacterSheet(ch)
 
     const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0
-    const charZY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET
+
+    // Body modifier visuals (computed early for z-sort)
+    const modYOffset = getBodyModifierYOffset(ch.activeBodyModifier, performance.now() / 1000)
+    const modScale = getBodyModifierScale(ch.activeBodyModifier)
+
+    // Include modYOffset in z-sort so characters with large Y offsets depth-sort correctly
+    const charZY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET + modYOffset
 
     // Ghost escape: fade out based on progress
     const isGhost = ch.state === CharacterState.SOUL_GHOST_ESCAPE
     const ghostAlpha = isGhost ? Math.max(0, 1 - ch.stateTimer / (ch.stateDuration || 2)) : 1
 
+    // Comedy atom adjustments (additive offsets + multiplicative scale)
+    const atomPlayer = atomPlayers?.get(ch.id)
+    const atomAdj = atomPlayer?.getCurrentAdjustments()
+    const atomOffX = atomAdj?.offsetX ?? 0
+    const atomOffY = atomAdj?.offsetY ?? 0
+    const atomScale = atomAdj?.scale ?? 1
+
+    // Combined scale: body modifier × atom scale
+    const combinedScale = modScale * atomScale
+
     // PNG spritesheet path (LimeZu characters — frames span 2 rows: 48×96)
     if (ch.sheetCanvas) {
       const { sx, sy } = getFrameCoords(ch.state, ch.dir, ch.frame)
       const srcH = CHAR_FRAME_SIZE * 2 // two rows per character frame
-      const dw = Math.round(CHAR_FRAME_SIZE * zoom)
-      const dh = Math.round(srcH * zoom)
-      const drawX = Math.round(offsetX + ch.x * zoom - dw / 2)
-      const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - dh)
+      const dw = Math.round(CHAR_FRAME_SIZE * zoom * combinedScale)
+      const dh = Math.round(srcH * zoom * combinedScale)
+      const drawX = Math.round(offsetX + (ch.x + atomOffX) * zoom - dw / 2)
+      const drawY = Math.round(offsetY + (ch.y + sittingOffset + modYOffset + atomOffY) * zoom - dh)
       const sheet = ch.sheetCanvas
 
       // Matrix effect uses SpriteData fallback — skip PNG for now
@@ -193,9 +212,9 @@ export function renderScene(
     // Fallback: SpriteData (hand-coded pixel arrays)
     const sprites = getCharacterSprites(ch.palette, ch.hueShift)
     const spriteData = getCharacterSprite(ch, sprites)
-    const cached = getCachedSprite(spriteData, zoom)
-    const drawX = Math.round(offsetX + ch.x * zoom - cached.width / 2)
-    const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height)
+    const cached = getCachedSprite(spriteData, zoom * combinedScale)
+    const drawX = Math.round(offsetX + (ch.x + atomOffX) * zoom - cached.width / 2)
+    const drawY = Math.round(offsetY + (ch.y + sittingOffset + modYOffset + atomOffY) * zoom - cached.height)
 
     if (ch.matrixEffect) {
       const mDrawX = drawX
@@ -603,6 +622,8 @@ export function renderFrame(
   layoutCols?: number,
   layoutRows?: number,
   venueImages?: VenueImages | null,
+  atomPlayers?: Map<number, AtomPlayer>,
+  cameraTransform?: { zoom: number; offsetX: number; offsetY: number },
 ): { offsetX: number; offsetY: number } {
   // Clear
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
@@ -611,11 +632,17 @@ export function renderFrame(
   const cols = layoutCols ?? (tileMap.length > 0 ? tileMap[0].length : 0)
   const rows = layoutRows ?? tileMap.length
 
-  // Center map in viewport + pan offset (integer device pixels)
-  const mapW = cols * TILE_SIZE * zoom
-  const mapH = rows * TILE_SIZE * zoom
-  const offsetX = Math.floor((canvasWidth - mapW) / 2) + Math.round(panX)
-  const offsetY = Math.floor((canvasHeight - mapH) / 2) + Math.round(panY)
+  // Apply camera system transform on top of base zoom/pan
+  const camZoom = cameraTransform?.zoom ?? 1
+  const camOffX = cameraTransform?.offsetX ?? 0
+  const camOffY = cameraTransform?.offsetY ?? 0
+  const effectiveZoom = zoom * camZoom
+
+  // Center map in viewport + pan offset + camera offset (integer device pixels)
+  const mapW = cols * TILE_SIZE * effectiveZoom
+  const mapH = rows * TILE_SIZE * effectiveZoom
+  const offsetX = Math.floor((canvasWidth - mapW) / 2) + Math.round(panX + camOffX)
+  const offsetY = Math.floor((canvasHeight - mapH) / 2) + Math.round(panY + camOffY)
 
   if (venueImages) {
     // Venue mode: draw both PNG layers before characters so characters appear on top
@@ -624,12 +651,12 @@ export function renderFrame(
     ctx.drawImage(venueImages.layer2, offsetX, offsetY, mapW, mapH)
   } else {
     // Office/editor mode: draw tile grid
-    renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols)
+    renderTileGrid(ctx, tileMap, offsetX, offsetY, effectiveZoom, tileColors, layoutCols)
   }
 
   // Seat indicators (below furniture/characters, on top of floor)
   if (selection) {
-    renderSeatIndicators(ctx, selection.seats, selection.characters, selection.selectedAgentId, selection.hoveredTile, offsetX, offsetY, zoom)
+    renderSeatIndicators(ctx, selection.seats, selection.characters, selection.selectedAgentId, selection.hoveredTile, offsetX, offsetY, effectiveZoom)
   }
 
   // In venue mode, no individual furniture sprites (they're in the PNG layers)
@@ -644,29 +671,29 @@ export function renderFrame(
   // Draw characters on top of venue layers
   const selectedId = selection?.selectedAgentId ?? null
   const hoveredId = selection?.hoveredAgentId ?? null
-  renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
+  renderScene(ctx, allFurniture, characters, offsetX, offsetY, effectiveZoom, selectedId, hoveredId, atomPlayers)
 
   // Speech bubbles (always on top of characters)
-  renderBubbles(ctx, characters, offsetX, offsetY, zoom)
-  renderSpeechBubbles(ctx, characters, offsetX, offsetY, zoom)
-  renderEmotes(ctx, characters, offsetX, offsetY, zoom)
+  renderBubbles(ctx, characters, offsetX, offsetY, effectiveZoom)
+  renderSpeechBubbles(ctx, characters, offsetX, offsetY, effectiveZoom)
+  renderEmotes(ctx, characters, offsetX, offsetY, effectiveZoom)
 
   // Editor overlays
   if (editor) {
     if (editor.showGrid) {
-      renderGridOverlay(ctx, offsetX, offsetY, zoom, cols, rows, tileMap)
+      renderGridOverlay(ctx, offsetX, offsetY, effectiveZoom, cols, rows, tileMap)
     }
     if (editor.showGhostBorder) {
-      renderGhostBorder(ctx, offsetX, offsetY, zoom, cols, rows, editor.ghostBorderHoverCol, editor.ghostBorderHoverRow)
+      renderGhostBorder(ctx, offsetX, offsetY, effectiveZoom, cols, rows, editor.ghostBorderHoverCol, editor.ghostBorderHoverRow)
     }
     if (editor.ghostSprite && editor.ghostCol >= 0) {
-      renderGhostPreview(ctx, editor.ghostSprite, editor.ghostCol, editor.ghostRow, editor.ghostValid, offsetX, offsetY, zoom)
+      renderGhostPreview(ctx, editor.ghostSprite, editor.ghostCol, editor.ghostRow, editor.ghostValid, offsetX, offsetY, effectiveZoom)
     }
     if (editor.hasSelection) {
-      renderSelectionHighlight(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
-      editor.deleteButtonBounds = renderDeleteButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
+      renderSelectionHighlight(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, effectiveZoom)
+      editor.deleteButtonBounds = renderDeleteButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, effectiveZoom)
       if (editor.isRotatable) {
-        editor.rotateButtonBounds = renderRotateButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
+        editor.rotateButtonBounds = renderRotateButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, effectiveZoom)
       } else {
         editor.rotateButtonBounds = null
       }

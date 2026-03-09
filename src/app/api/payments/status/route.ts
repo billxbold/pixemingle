@@ -6,8 +6,8 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = createServiceClient();
-  const { data: profile, error } = await db.from('users').select('tier, stripe_customer_id').eq('id', userId).single();
+  const { data: profile, error } = await db.from('users').select('tier').eq('id', userId).single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ tier: profile?.tier || 'free', stripe_customer_id: profile?.stripe_customer_id || null });
+  return NextResponse.json({ tier: profile?.tier || 'free' });
 }

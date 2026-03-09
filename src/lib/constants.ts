@@ -1,4 +1,3 @@
-import type { SoulType, SoulConfig } from '@/types/database'
 
 export const PERSONALITY_QUESTIONS = [
   {
@@ -64,56 +63,26 @@ export const HOROSCOPE_MATRIX: number[][] = [
   [0.55, 0.75, 0.50, 0.90, 0.40, 0.65, 0.60, 0.95, 0.55, 0.70, 0.55, 0.50], // Pisces
 ]
 
-export const SOUL_CONFIGS: Record<SoulType, SoulConfig> = {
-  romantic: {
-    type: 'romantic',
-    persistence: 4,
-    drama_level: 4,
-    romance_style: 5,
-    humor_type: 'self-deprecating',
-  },
-  funny: {
-    type: 'funny',
-    persistence: 3,
-    drama_level: 3,
-    romance_style: 2,
-    humor_type: 'slapstick',
-  },
-  bold: {
-    type: 'bold',
-    persistence: 2,
-    drama_level: 5,
-    romance_style: 4,
-    humor_type: 'dry',
-  },
-  intellectual: {
-    type: 'intellectual',
-    persistence: 3,
-    drama_level: 2,
-    romance_style: 3,
-    humor_type: 'wordplay',
-  },
-}
 
 export const RATE_LIMITS = {
   free: {
     matches_per_week: 3,
     retries_per_match: 1,
-    scenarios_per_day: 5,
+    theater_turns_per_day: 5,
     chat_messages_per_day: 50,
     max_photos: 3,
   },
   wingman: {
     matches_per_week: Infinity,
     retries_per_match: 3,
-    scenarios_per_day: 20,
+    theater_turns_per_day: 20,
     chat_messages_per_day: Infinity,
     max_photos: 6,
   },
   rizzlord: {
     matches_per_week: Infinity,
     retries_per_match: Infinity,
-    scenarios_per_day: 50,
+    theater_turns_per_day: 50,
     chat_messages_per_day: Infinity,
     max_photos: 6,
   },
