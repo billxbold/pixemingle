@@ -13,7 +13,7 @@ import {
   CAN_SPRITE,
 } from '../sprites/spriteData'
 
-// Placeholder sprite for dating furniture (will be replaced with LimeZu tileset sprites)
+// Placeholder sprite for dating furniture (will be replaced with PixelLab-generated sprites)
 function placeholderSprite(w: number, h: number, color: string): SpriteData {
   const sprite: SpriteData = []
   for (let r = 0; r < h * 16; r++) {
@@ -64,7 +64,7 @@ export const FURNITURE_CATALOG: CatalogEntryWithCategory[] = [
   { type: FurnitureType.PC,         label: 'PC',         footprintW: 1, footprintH: 1, sprite: PC_SPRITE,           isDesk: false, category: 'electronics' },
   { type: FurnitureType.LAMP,       label: 'Lamp',       footprintW: 1, footprintH: 1, sprite: LAMP_SPRITE,         isDesk: false, category: 'decor' },
 
-  // ── Dating scene furniture (placeholder sprites — replace with LimeZu) ──
+  // ── Dating scene furniture (placeholder sprites — replace with PixelLab) ──
   { type: FurnitureType.CAFE_TABLE,   label: 'Cafe Table',   footprintW: 2, footprintH: 2, sprite: placeholderSprite(2, 2, '#8B4513'), isDesk: false, category: 'desks' },
   { type: FurnitureType.CAFE_CHAIR,   label: 'Cafe Chair',   footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#A0522D'), isDesk: false, category: 'chairs' },
   { type: FurnitureType.COFFEE_CUP,   label: 'Coffee Cup',   footprintW: 1, footprintH: 1, sprite: placeholderSprite(1, 1, '#D2691E'), isDesk: false, category: 'misc' },

@@ -2,7 +2,7 @@ import { CharacterState, Direction } from '../types'
 import type { CharacterAppearance } from '../types'
 
 // ── Spritesheet layout ───────────────────────────────────────────
-// LimeZu character sheets: 56 columns × 41 rows, each frame 48×48px
+// Character sheets: 56 columns × 41 rows, each frame 48×48px
 // Row groups (4 directions each: DOWN=+0, LEFT=+1, RIGHT=+2, UP=+3)
 
 export const CHAR_FRAME_SIZE = 48

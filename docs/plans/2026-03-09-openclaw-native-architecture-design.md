@@ -928,7 +928,7 @@ The gatekeeper agent's SOUL.md defines what impresses them:
 
 ### Why Portraits (Not Face Overlays on Sprites)
 
-48x48 sprites have ~8x6 pixels for the face. You cannot draw a "smug grin" vs a "forced smile" in 6 pixels. This is why LimeZu characters feel expressionless.
+48x48 sprites have ~8x6 pixels for the face. You cannot draw a "smug grin" vs a "forced smile" in 6 pixels. This is why generic pixel art characters feel expressionless.
 
 **Every successful pixel art game solves this the same way:** tiny sprites for body language + large portraits for facial expression. Stardew Valley (16x32 sprites + 64x64 portraits), Undertale (32x32 sprites + large dialogue faces), Omori, Deltarune — all use this two-scale system.
 
@@ -1966,9 +1966,9 @@ The user isn't passively watching a movie. They're **coaching their agent like a
 
 ## 12. Asset Pipeline
 
-### Drop LimeZu Entirely
+### Drop Placeholder Art Entirely
 
-LimeZu assets are replaced with AI-generated pixel art for a unique branded look. The engine rendering code stays — only the source PNGs change.
+Placeholder assets are replaced with PixelLab AI-generated pixel art for a unique branded look. The pixel-agents engine rendering code stays — only the source PNGs change.
 
 ### Asset Generation with PixelLab (Dev-Time, One-Time)
 
@@ -2069,7 +2069,7 @@ dating sim comedy aesthetic, warm palette, clear silhouettes"
 Key principles:
 - **Faces are BIG** — minimum 30% of character height dedicated to face
 - **Bold outlines** — 1-2px dark outlines on everything for readability
-- **Saturated colors** — no muddy or muted palettes (LimeZu's weakness)
+- **Saturated colors** — no muddy or muted palettes
 - **Clear silhouettes** — characters readable at 1x zoom
 - **Exaggerated proportions** — bigger heads, bigger eyes, more expressive
 
@@ -2292,8 +2292,8 @@ creates UNIQUE comedy. No two theater sessions are the same.
 | `src/engine/genderAnimations.ts` | Replaced by expression engine gender × role modifier system (section 10) |
 | Keyword regex in `agent-chat/route.ts` | Agent brain handles intent via ReAct loop |
 | `scenarios` DB table | Replaced by `theater_turns` table |
-| LimeZu character PNGs in `/sprites/characters/` | Replaced by PixelLab-generated assets |
-| LimeZu venue PNGs in `/sprites/venues/` | Replaced by AI-generated venues |
+| Placeholder character PNGs in `/sprites/characters/` | Replaced by PixelLab-generated assets |
+| Placeholder venue PNGs in `/sprites/venues/` | Replaced by PixelLab-generated venues |
 | `src/lib/constants.ts` soul type hardcoded configs | Replaced by SOUL.md per agent |
 
 ### Remove from `package.json`
@@ -2316,7 +2316,7 @@ creates UNIQUE comedy. No two theater sessions are the same.
 | Game loop (`engine/engine/gameLoop.ts`) | Keep as-is |
 | World state (`engine/engine/officeState.ts`) | Keep — add theater turn queue |
 | Sprite cache (`engine/sprites/spriteCache.ts`) | Keep as-is |
-| Spritesheet loader (`engine/sprites/spritesheetLoader.ts`) | Keep — swap LimeZu PNGs for new assets |
+| Spritesheet loader (`engine/sprites/spritesheetLoader.ts`) | Keep — swap placeholder PNGs for PixelLab assets |
 | `buildCharacterSheet()` compositing | Keep — same system, better source layers |
 | Particle system (`engine/particles.ts`) | Keep — add new particle types |
 | Speech bubble renderer (`engine/speechBubbleRenderer.ts`) | Keep — enhance with text effects |

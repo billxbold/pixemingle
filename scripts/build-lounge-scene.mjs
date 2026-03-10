@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build a unique Rooftop Lounge scene (layer1 + layer2) from LimeZu tiles.
+ * Build a unique Rooftop Lounge scene (layer1 + layer2) — DEPRECATED, references deleted assets.
  * Uses Room Builder (floors/walls) + Condominium furniture.
  * Target: 14×13 tiles (672×642 px) to match other venues.
  */

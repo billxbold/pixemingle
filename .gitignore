@@ -41,7 +41,7 @@ next-env.d.ts
 # git worktrees
 .worktrees/
 
-# LimeZu licensed tilesets (not committed)
+# Placeholder tilesets (not committed)
 public/sprites/tilesets/floors/
 public/sprites/tilesets/lounge/
 public/sprites/tilesets/gallery/

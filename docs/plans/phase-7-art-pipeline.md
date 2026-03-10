@@ -86,7 +86,7 @@ All in-game text uses a single pixel font (Silkscreen) in #3D405B on #F4F1DE. On
 **What it is:** AI model trained on pixel art. Describe what you want, get pixel art back in 30-180s.
 
 **Available via MCP tools:**
-- `create_character` — 48px or 128px, 4/8 directions, chibi/default proportions
+- `create_character` — 16-128px canvas, 4/8 directions, chibi/default proportions
 - `animate_character` — 49 template animations (walk, idle, kick, drink, backflip...)
 - `create_map_object` — transparent-bg objects up to 400x400px
 - `create_tiles_pro` — 1-16 tile variations, square/hex/iso
@@ -153,11 +153,11 @@ See section 18 for full monetization model.
 
 ---
 
-## 4. Migration Plan — LimeZu → Golden Hour SF
+## 4. Migration Plan — Placeholder Art → Golden Hour SF
 
 ### Current state
-The project ships with **LimeZu** commercial pixel art assets:
-- 20 premade character spritesheets (56 cols × 41 rows, 48px frames)
+The project ships with **placeholder** pixel art assets (extracted from pixel-agents):
+- 20 premade character spritesheets (pixel-agents format: 56 cols × 41 rows, 48px frames)
 - 9 body, 7 eye, 40 outfit, 70 hairstyle compositable layers
 - 7 venue backgrounds (layer1 + layer2 PNGs)
 - Per-venue furniture tilesets
@@ -165,13 +165,13 @@ The project ships with **LimeZu** commercial pixel art assets:
 
 ### Migration strategy: **Incremental replacement, not big bang**
 
-1. **Keep LimeZu as fallback** — don't delete until Golden Hour SF assets are validated
+1. **Keep placeholders as fallback** — don't delete until Golden Hour SF assets are validated
 2. **New assets go to same paths** — `buildCharacterSheet()` and `venueAssets.ts` don't change their URL patterns
-3. **Premade characters: full replacement** — 20 new PixelLab characters replace 20 LimeZu ones
-4. **Compositable layers: full replacement** — new Pillow-generated layers replace LimeZu layers (same filenames)
-5. **Venue backgrounds: full replacement** — new compositions replace LimeZu layer1/layer2
-6. **Furniture: keep LimeZu initially** — furniture pieces are small enough that outline swap alone makes them passable
-7. **Spritesheet format constraint:** New premade characters MUST use the same 56×41 grid LimeZu layout
+3. **Premade characters: full replacement** — 20 new PixelLab characters replace 20 placeholder ones
+4. **Compositable layers: full replacement** — new Pillow-generated layers replace placeholder layers (same filenames)
+5. **Venue backgrounds: full replacement** — new compositions replace placeholder layer1/layer2
+6. **Furniture: keep placeholders initially** — furniture pieces are small enough that outline swap alone makes them passable
+7. **Spritesheet format constraint:** New premade characters MUST use the same pixel-agents 56×41 grid format
 
 ### Filename compatibility matrix
 
@@ -189,25 +189,51 @@ The project ships with **LimeZu** commercial pixel art assets:
 
 ---
 
-## 5. Asset Inventory & Pipeline Assignment
+## 5. Character-to-Tile Ratio (LOCKED)
 
-### Main Characters — 48x48 sprites (WHITE outlines)
+**Validated via ratio test (`art-tests/ratio-test/tile_ratio_comparison.png`).**
+
+The pixel-agents engine renders characters in a **48×96 frame** (1 tile wide, 2 tiles tall).
+PixelLab's `~60% of canvas height` rule means:
+
+| PixelLab canvas | Character content | In 48×96 frame | Tiles tall | Status |
+|-----------------|-------------------|-----------------|------------|--------|
+| 48×48 | ~12×34px | 0.71 tiles | **TOO SMALL** | Rejected |
+| 80×80 | ~20×57px | 1.19 tiles | Too short | Rejected |
+| **96×96** | **~28×67px** | **1.40 tiles** | **CORRECT** | **Approved** |
+| 96×96 (default) | ~27×70px | 1.46 tiles | Slightly tall | Backup option |
+
+**Locked pipeline:** Generate at **96px canvas** → crop center 48px horizontally → **48×96 frame**.
+
+- Original pixel-agents character: 42×66px content, 1.38 tiles tall
+- PixelLab 96px chibi cropped: 28×67px content, 1.40 tiles tall — **1px delta, perfect match**
+- Character is narrower (28px vs 42px) — correct for chibi proportions (big head, slim body)
+
+**Engine code stays unchanged:** `srcH = CHAR_FRAME_SIZE * 2` (48×96 frame) is correct.
+
+---
+
+## 6. Asset Inventory & Pipeline Assignment
+
+### Main Characters — 48×96 sprites (WHITE outlines)
 
 | Asset | Count | Pipeline | Notes |
 |-------|-------|----------|-------|
-| 20 premade character bases | 20 | PixelLab | 4 directions each, chibi, high detail |
+| 20 premade character bases | 20 | PixelLab | **96px canvas**, 4 directions, chibi, high detail |
 | Walk animation per character | 20 | PixelLab | `animate_character` template "walking" |
 | Idle animation per character | 20 | PixelLab | `animate_character` template "breathing-idle" |
-| Spritesheet stitching | 20 | Script | Compose into LimeZu 56×41 grid |
-| **White** outline swap | 20 files | Script | Post-process: dark outlines → #FFFFFF |
+| Crop 96×96 → 48×96 | 20 | Script | Center-crop horizontally, keep full height |
+| Spritesheet stitching | 20 | Script | Compose into pixel-agents 56×41 grid (48×96 per cell) |
+| White outline | N/A | Engine runtime | `drawWithWhiteOutline()` in renderer — no sprite post-processing |
 | **Subtotal** | **~80 jobs** | — | ~3hrs PixelLab generation |
 
-### NPCs — 48x48 sprites (DARK GRAY outlines)
+### NPCs — 48×96 sprites (DARK GRAY outlines)
 
 | Asset | Count | Pipeline | Notes |
 |-------|-------|----------|-------|
-| 10 NPC character bases | 10 | PixelLab | 4 directions, chibi, **medium** detail |
+| 10 NPC character bases | 10 | PixelLab | **96px canvas**, 4 directions, chibi, **medium** detail |
 | Walk + idle animations | 10 | PixelLab | Simple walk + breathing-idle only |
+| Crop 96×96 → 48×96 | 10 | Script | Same crop as main characters |
 | Dark gray outline swap | 10 | Script | Post-process: outlines → #2A2A2A |
 | **Subtotal** | **~30 jobs** | — | ~1hr generation |
 
@@ -286,7 +312,7 @@ The `atomPlayer.ts` applies offset/scale adjustments to existing spritesheet fra
 
 ---
 
-## 6. NPC System
+## 7. NPC System
 
 ### Purpose
 Venues feel empty and creepy without other people. NPCs populate the space so it feels like a real coffee shop / gallery / restaurant.
@@ -333,17 +359,11 @@ All skin tones distributed. No brand palette colors (no terracotta, sage, golden
 
 ---
 
-## 7. Outline Swap Scripts
+## 8. Outline Swap Scripts
 
-### Main characters: dark → white
+### Main characters: WHITE outlines rendered by ENGINE at runtime
 
-**New script:** `scripts/swap_outlines_white.py`
-Same logic as `swap_outlines.py` but replaces dark outlines with white (#FFFFFF).
-
-```bash
-python scripts/swap_outlines_white.py character.png character_white.png
-python scripts/swap_outlines_white.py --dir public/sprites/characters/premade/
-```
+**No sprite post-processing needed.** The renderer (`src/engine/engine/renderer.ts` → `drawWithWhiteOutline()`) draws white pixel-perfect outlines around main characters at render time. Raw PixelLab sprites keep their original dark outlines.
 
 ### NPCs: dark → dark gray
 
@@ -360,35 +380,37 @@ python scripts/swap_outlines.py --color "#3D405B" --dir public/sprites/ui/
 ```
 
 ### Post-process rule
-- **Every main character** → `swap_outlines_white.py`
+- **Every main character** → NO post-processing (engine renders white outlines at runtime)
 - **Every NPC** → `swap_outlines.py --color "#2A2A2A"`
 - **Every UI asset** → `swap_outlines.py --color "#3D405B"`
 - **Props / furniture** → keep black outlines (no swap)
 
 ---
 
-## 8. PixelLab Generation Settings (locked)
+## 9. PixelLab Generation Settings (locked)
 
 All PixelLab MCP calls MUST use these settings for consistency:
 
 ```
-# Main Characters (48px)
-size: 48
+# Main Characters (96px canvas → crop to 48×96 frame)
+size: 96
 view: "low top-down"
 outline: "single color outline"
 shading: "medium shading"
 detail: "high detail"
 proportions: {"type": "preset", "name": "chibi"}
 ai_freedom: 400-500
+# Post-process: crop center 48px horizontally → 48×96 frame
 
-# NPCs (48px)
-size: 48
+# NPCs (96px canvas → crop to 48×96 frame)
+size: 96
 view: "low top-down"
 outline: "single color outline"
 shading: "medium shading"
 detail: "medium detail"          ← lower than main characters
 proportions: {"type": "preset", "name": "chibi"}
 ai_freedom: 300-400              ← less creative freedom, more generic
+# Post-process: crop to 48×96, then outline swap to #2A2A2A
 
 # Characters (128px portraits)
 size: 128
@@ -411,8 +433,9 @@ tile_view: "high top-down"
 
 # "Pixel Me / Pixel My Pet" (runtime)
 # Character sprite:
-size: 48, view: "low top-down", outline: "single color outline",
+size: 96, view: "low top-down", outline: "single color outline",
 shading: "medium shading", detail: "high detail", chibi
+# Post-process: crop 96×96 → 48×96
 # Portrait:
 create_map_object at 128×128, view: "side" or "front", detailed shading
 ```
@@ -447,17 +470,22 @@ Chibi cartoon style, friendly expression. Transparent background.
 
 ---
 
-## 9. Spritesheet Stitcher Script
+## 10. Spritesheet Stitcher Script
 
-**Problem:** PixelLab generates individual direction/animation frames. The engine expects a single spritesheet in LimeZu 56×41 grid format.
+**Problem:** PixelLab generates 96×96 frames. The engine expects 48×96 frames in a pixel-agents 56×41 grid spritesheet.
 
 **Solution:** `scripts/stitch_spritesheet.py`
+
+**Two-step pipeline per frame:**
+1. **Crop** 96×96 → 48×96 (center 48px horizontally, keep full 96px height)
+2. **Place** cropped frame into correct grid position in 2688×1968 spritesheet
 
 ```python
 python scripts/stitch_spritesheet.py --input-dir pixellab-output/char_01/ --output premade/Premade_Character_48x48_01.png
 ```
 
 **Grid layout (from spritesheetLoader.ts):**
+Each cell is 48×96 (1 col × 2 rows). Row numbers refer to the top row of each 2-row cell.
 ```
 Row 2:  idle      (4 dirs × 1 frame)
 Row 6:  walk      (4 dirs × 4 frames)
@@ -476,14 +504,14 @@ Row 39: hurt      (4 dirs × 2 frames)
 
 ---
 
-## 10. Implementation Order (with validation gates)
+## 11. Implementation Order (with validation gates)
 
 ### Step 0: Pipeline Tooling (day 1)
 
 **Tasks:**
-- [ ] Update `scripts/swap_outlines.py` to accept `--color` parameter (default #3D405B)
-- [ ] Write `scripts/swap_outlines_white.py` (dark outlines → #FFFFFF for main characters)
-- [ ] Write `scripts/stitch_spritesheet.py` (LimeZu grid stitcher)
+- [x] Update `scripts/swap_outlines.py` to accept `--color` parameter (default #3D405B) — DONE
+- [x] ~~`swap_outlines_white.py`~~ — NOT NEEDED (engine renders white outlines at runtime via `drawWithWhiteOutline()`)
+- [ ] Write `scripts/stitch_spritesheet.py` (pixel-agents grid stitcher)
 - [ ] Write `scripts/generate_portrait_variants.py` (expression region swap + HSL variants)
 - [ ] Write `scripts/asset_audit.py` (validates all expected files exist, correct dimensions)
 
@@ -491,32 +519,30 @@ Row 39: hurt      (4 dirs × 2 frames)
 
 ### Step 1: Style Probe — 2 Characters + 1 NPC (day 2) ✅ PASSED
 
-**Status:** Characters generated and approved. White outline test pending.
+**Status:** Characters generated and approved.
 
 **Completed:**
 - [x] Generate character_01 (Tech Casual masc) — approved
 - [x] Generate character_02 (Boho fem) — approved
 - [x] Slate blue outline swap tested — works but slate blue rejected for characters
-- [ ] White outline swap test — pending
+- [x] White outlines — engine renders at runtime via `drawWithWhiteOutline()`, done
 - [ ] Generate 1 NPC with dark gray outlines — pending
-- [ ] Side-by-side comparison: main char (white outline) vs NPC (dark outline) vs venue background
+- [ ] Side-by-side comparison: NPC (dark gray) vs main char vs venue background
 
 **Gate 1 (style approval):**
 - [x] Characters look good from PixelLab
-- [ ] White outlines look good on main characters
 - [ ] Dark gray outlines make NPCs recede visually
 - [ ] Clear visual hierarchy: main chars > NPCs > environment
 
 ### Step 2: Batch Main Characters (days 3-4)
 
-**Prerequisite:** Gate 1 passed (including white outline approval).
+**Prerequisite:** Gate 1 passed.
 
 **Tasks:**
 - [ ] Generate 20 characters (see Character Diversity Spec, section 11)
 - [ ] Batches of 8 (PixelLab concurrent limit)
 - [ ] Walk + idle animations per character
-- [ ] White outline swap on all
-- [ ] Stitch into LimeZu grid spritesheets
+- [ ] Stitch into pixel-agents grid spritesheets (engine handles white outlines at runtime)
 - [ ] Place in `public/sprites/characters/premade/`
 
 **Gate 2:**
@@ -543,7 +569,7 @@ Row 39: hurt      (4 dirs × 2 frames)
 ### Step 4: Props (day 5)
 
 **Tasks:**
-- [ ] Generate 15 dating props via `create_map_object` at 48x48
+- [ ] Generate 15 dating props via `create_map_object` at 48×96 scale
 - [ ] Generate 3 entrance vehicle props (helicopter, skateboard, parachute)
 - [ ] Keep black outlines on props (no swap)
 - [ ] Place in `public/sprites/props/`
@@ -576,7 +602,7 @@ Row 39: hurt      (4 dirs × 2 frames)
 - [ ] Golden light overlay per venue
 - [ ] Output as `{venue}_layer1.png` / `{venue}_layer2.png`
 
-**Fallback:** Keep LimeZu backgrounds for problematic venues.
+**Fallback:** Keep placeholder backgrounds for problematic venues.
 
 **Gate 6:**
 - [ ] All 6 venues render without seam artifacts
@@ -647,14 +673,14 @@ Row 39: hurt      (4 dirs × 2 frames)
 
 **Tasks:**
 - [ ] `scripts/asset_audit.py` — all files present
-- [ ] Delete LimeZu originals (backup in .gitignore'd folder)
+- [ ] Delete placeholder originals (backup in .gitignore'd folder)
 - [ ] Build passes clean
 - [ ] Visual walkthrough
 - [ ] Bundle size < 50MB
 
 ---
 
-## 11. Character Diversity Spec (20 premade, 10 masc + 10 fem)
+## 12. Character Diversity Spec (20 premade, 10 masc + 10 fem)
 
 | # | Presentation | Fashion style | Hair | Palette emphasis |
 |---|-------------|--------------|------|-----------------|
@@ -683,7 +709,7 @@ All skin tones distributed across the 20. Characters 17-18 deliberately androgyn
 
 ---
 
-## 12. Pet System — "Pixel My Pet"
+## 13. Pet System — "Pixel My Pet"
 
 ### How It Works
 
@@ -729,7 +755,7 @@ Sell at $1.99 → **97% margin**
 
 ---
 
-## 13. "Pixel Me" System
+## 14. "Pixel Me" System
 
 ### How It Works
 
@@ -770,7 +796,7 @@ POST /api/pixel-me
 
 ---
 
-## 14. Monetization Model
+## 15. Monetization Model
 
 ### Pricing (locked)
 
@@ -841,13 +867,13 @@ PAID — Seasonal/Limited (FOMO):
 
 ---
 
-## 15. Scripts Inventory
+## 16. Scripts Inventory
 
 | Script | Purpose | Input | Output |
 |--------|---------|-------|--------|
-| `swap_outlines.py` | Dark outlines → specified color | PNG + `--color` | PNG |
-| `swap_outlines_white.py` | Dark outlines → white (#FFFFFF) | PNG | PNG |
-| `stitch_spritesheet.py` | Compose frames into LimeZu 56×41 grid | Directory of 48px frames | Spritesheet PNG |
+| `swap_outlines.py` | Dark outlines → specified color (NPCs, UI) | PNG + `--color` | PNG |
+| ~~`swap_outlines_white.py`~~ | NOT NEEDED — engine renders white outlines at runtime | — | — |
+| `stitch_spritesheet.py` | Compose frames into pixel-agents 56×41 grid | Directory of 48px frames | Spritesheet PNG |
 | `generate_portrait_variants.py` | Expression + lighting variants | 128px base portrait | 48 PNGs per character |
 | `generate_bodies.py` | 10 body type layers | — | 10 spritesheet PNGs |
 | `generate_skins.py` | 6 skin tone variants | body PNGs | 60 PNGs |
@@ -861,7 +887,7 @@ PAID — Seasonal/Limited (FOMO):
 
 ---
 
-## 16. Asset File Destinations
+## 17. Asset File Destinations
 
 ```
 public/sprites/
@@ -895,7 +921,7 @@ public/sprites/
 
 ---
 
-## 17. Risk Register
+## 18. Risk Register
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|-----------|------------|
@@ -904,7 +930,7 @@ public/sprites/
 | Spritesheet stitching misalignment | High | Medium | Build + test stitcher before character gen. |
 | Compositable layers don't align | High | High | Test each category against `buildCharacterSheet()`. |
 | PixelLab budget exhaustion | Medium | Low | ~295 jobs. Well under 2000 limit. |
-| Venue quadrant seams | Medium | Medium | Fallback: keep LimeZu backgrounds. |
+| Venue quadrant seams | Medium | Medium | Fallback: keep placeholder backgrounds. |
 | Portrait expression swap uncanny | Medium | High | Fallback: 3 key expressions via PixelLab. |
 | Pixel Me quality inconsistent | Medium | Medium | Allow re-rolls ($0.49). Refund policy if unusable. |
 | Pet scaling looks wrong at 48px | Low | Medium | Adjustable scale per pet type. |
@@ -912,7 +938,7 @@ public/sprites/
 
 ---
 
-## 18. Cost Summary
+## 19. Cost Summary
 
 | Item | Cost | Notes |
 |------|------|-------|
@@ -928,7 +954,7 @@ Runtime costs (Pixel Me / Pet):
 
 ---
 
-## 19. Test Assets (generated so far)
+## 20. Test Assets (generated so far)
 
 ```
 art-tests/
@@ -950,13 +976,21 @@ art-tests/
 │   ├── dino_south.png        # Pixel Me test (T-Rex from reference image)
 │   ├── dino_128.png          # 128px version — high quality
 │   └── pixel_poodle.png      # Pixel My Pet test (poodle from photo) — excellent
+├── ratio-test/              # Character-to-tile ratio validation — APPROVED
+│   ├── 96px_chibi_south.png       # 96px canvas chibi (28×67px content)
+│   ├── 96px_chibi_cropped_48x96.png  # Cropped to 48×96 frame — CORRECT RATIO (1.40 tiles)
+│   ├── 96px_default_south.png     # 96px canvas default proportions
+│   ├── 96px_default_cropped_48x96.png # Slightly too tall (1.46 tiles)
+│   ├── 80px_chibi_south.png       # 80px canvas — too short
+│   ├── comparison.png             # Side-by-side: original vs all tests
+│   └── tile_ratio_comparison.png  # ON-GRID comparison — approved
 ├── warm-analog/              # Rejected — delete in Step 11
 └── polaroid-party/           # Rejected — delete in Step 11
 ```
 
 ---
 
-## 20. Success Criteria
+## 21. Success Criteria
 
 Phase 7 is complete when:
 
@@ -977,9 +1011,9 @@ Phase 7 is complete when:
 
 ---
 
-## 21. Next Immediate Actions
+## 22. Next Immediate Actions
 
-1. **Write `swap_outlines_white.py`** and test on style probe characters
-2. **Generate 1 NPC** with muted clothes + dark gray outlines
-3. **Side-by-side screenshot:** main char (white) + NPC (dark gray) + venue background
+1. **Update `stitch_spritesheet.py`** to crop 96×96 → 48×96 before placing in grid
+2. **Generate 1 NPC** at 96px with muted clothes + dark gray outlines
+3. **Side-by-side screenshot:** NPC (dark gray) vs main char vs venue background
 4. **Approve visual hierarchy** → then batch generate everything

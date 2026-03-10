@@ -211,7 +211,7 @@ export function renderScene(
     // Combined scale: body modifier × atom scale
     const combinedScale = modScale * atomScale
 
-    // PNG spritesheet path (LimeZu characters — frames span 2 rows: 48×96)
+    // PNG spritesheet path (frames span 2 rows: 48×96)
     if (ch.sheetCanvas) {
       const { sx, sy } = getFrameCoords(ch.state, ch.dir, ch.frame)
       const srcH = CHAR_FRAME_SIZE * 2 // two rows per character frame
